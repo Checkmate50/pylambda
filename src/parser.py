@@ -3,10 +3,10 @@ from src.util import *
 from typing import List, Optional
 
 class Lookahead(AbstractClass):
-    def __init__(self, unpack):
-        if not (unpack == lookahead_semi or unpack == lookahead_unop):
-            raise Exception("Internal Error, expected lookahead, got " + str(unpack))
-        self.unpack = unpack
+    def __init__(self, lookahead):
+        if not (lookahead == lookahead_semi or lookahead == lookahead_unop):
+            raise Exception("Internal Error, expected lookahead, got " + str(lookahead))
+        self.lookahead = lookahead
     def __str__(self):
         return "LOOKAHEAD " + str(self.unpack.__name__)
 
@@ -24,15 +24,25 @@ class PartialCommand(AbstractClass):
     def __init__(self, cmd : src.ast.Command, args : List[AbstractClass]):
         self.cmd = cmd
         self.args = args
+        self.index = -1
     def append(self, arg : AbstractClass):
-        self.args.append(arg)
+        if self.index == -1:
+            self.args.append(arg)
+            # Ok, this is _super_ janky, but control flow for command appending is done here
+            if self.cmd == src.ast.Seq:
+                self.index = 1
+        else:
+            print(self)
+            self.args[self.index].append(arg) # Wow, that's a lotta recursion
     def unpack(self):
-        return self.cmd(*self.args)
+        unpacked = [arg.unpack() if isinstance(arg, PartialCommand) else arg for arg in self.args]
+        return self.cmd(*unpacked)
     def is_partial(self):
         return isinstance(self.cmd, PartialCommand)
     def __str__(self):
         return "PARTIALCOMMAND " + str(self.cmd) + " " + str(self.args)
 
+# So it's sorta weird, but these lookahead functions "manage" the control flow of the parser
 def lookahead_semi(word : str, result : PartialCommand, state : ParserState):
     if word == ";":
         state.update(expect_semi)
@@ -73,43 +83,45 @@ def expect_const(word : str, result : PartialCommand, state : ParserState) -> Pa
     return result
 
 # Must follow from lookahead_unop
-def expect_unop(word : str, result : PartialCommand, state : ParserState):
+def expect_unop(word : str, result : PartialCommand, state : ParserState) -> PartialCommand:
     state.update(Lookahead(lookahead_unop))
     result.append(src.ast.Op(word)) # we can do this cause we already did the lookahead
     return result
 
-def expect_command(word : str, result : PartialCommand, state : ParserState) -> PartialCommand:
+def expect_command(word : str, result : Optional[PartialCommand], state : ParserState) -> PartialCommand:
     if word == "skip":
         state.update(expect_semi)
-        return PartialCommand(src.ast.Skip, [])
-    if word == "print":
+        cmd = PartialCommand(src.ast.Skip, [])
+        result.append()
+    elif word == "print":
         state.update(Lookahead(lookahead_unop))
-        return PartialCommand(src.ast.Print, [])
-    if word == "input":
+        cmd = PartialCommand(src.ast.Print, [])
+    elif word == "input":
         state.update(Lookahead(lookahead_unop))
-        return PartialCommand(src.ast.Input, [])
-    raise Exception("Parsing error: expected a command, got " + word)
+        cmd = PartialCommand(src.ast.Input, [])
+    else:
+        raise Exception("Parsing error: expected a command, got " + word)
+    if result is None:
+        return cmd
+    result.append(cmd)
+    return result
     
 def parse_line(line : List[str], 
   result : Optional[PartialCommand], 
   state : ParserState) -> Optional[PartialCommand]:
-    print(result)
     if len(line) == 0:
         return result
-    if line[0].startswith("//"):
+    if line[0].startswith("//"): #Comments 
         return result
     word = line[0]
     nxt = line[1:]
     if result is None:
-        comm = expect_command(word, PartialCommand(src.ast.Skip, []), state)
+        comm = expect_command(word, None, state)
         return parse_line(nxt, comm, state)
     if isinstance(state.next, Lookahead):
-        state.next.unpack(word, result, state)
+        state.next.lookahead(word, result, state)
         return parse_line(line, result, state)
-    comm = state.next(word, result, state)
-    if isinstance(result.cmd, src.ast.Seq):
-        result.append(comm)
-    print(result)
+    result = state.next(word, result, state)
     return parse_line(nxt, result, state)
 
 def parse(line : str, 
