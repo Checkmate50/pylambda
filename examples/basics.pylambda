@@ -1,0 +1,8 @@
+// Only integers and booleans
+// Print and input both work
+// Input requires integer input
+// Every line must end with a semicolon
+
+print true;
+input x;
+print x;

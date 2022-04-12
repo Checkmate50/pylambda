@@ -1,0 +1,9 @@
+print 1 == 1;
+print 5 > 3;
+print 5 < 3;
+x = 2 + 3;
+print x >= 4;
+print x <= 1;
+print not true;
+print true and false;
+print 1 < 3 or 2 == 3;

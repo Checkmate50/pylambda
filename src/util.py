@@ -1,11 +1,15 @@
+class InternalException(Exception):
+    def __init__(self, error : str):
+        super().__init__("Internal error: " + str(error))
+
 def typecheck(value : any, t : type):
     if not isinstance(value, t):
-        raise Exception("Internal Error, expected " + str(t.__name__) + " got " + value)
+        raise InternalException("expected " + str(t.__name__) + " got " + str(value))
 
 class AbstractClass:
     def __init__(self):
         raise Exception("Abstract class")
     def __str__(self):
-        raise Exception("Internal Error: forgot to __str__ an object")
+        raise InternalException("forgot to provide __str__ to " + str(type(self)))
     def __repr__(self):
         return self.__str__()
