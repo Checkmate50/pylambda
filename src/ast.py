@@ -2,48 +2,48 @@ import src.util as util
 
 # Yes, I will manually typecheck all of these cause they're _so_ important to get right
 
-class Expr(util.AbstractClass):
+class Expr(util.BaseClass):
     pass
 
-class Value(util.AbstractClass):
+class Value(util.BaseClass):
     pass
 
-class Command(util.AbstractClass):
+class Command(util.BaseClass):
     pass
 
 class Number(Value):
     def __init__(self, v : int):
         util.typecheck(v, int)
         self.v = v
-    def __str__(self):
+    def __repr__(self):
         return "Num " + str(self.v)
 
 class Bool(Value):
     def __init__(self, v : bool):
         util.typecheck(v, bool)
         self.v = v
-    def __str__(self):
+    def __repr__(self):
         return "Bool " + str(self.v)
 
 class Const(Expr):
     def __init__(self, v : Value):
         util.typecheck(v, Value)
         self.v = v
-    def __str__(self):
+    def __repr__(self):
         return "Const " + str(self.v)
 
-class Op(util.AbstractClass):
+class Op(util.BaseClass):
     def __init__(self, op : str):
         util.typecheck(op, str)
         self.op = op
-    def __str__(self):
+    def __repr__(self):
         return self.op
 
 class Var(Expr):
     def __init__(self, v : str):
         util.typecheck(v, str)
         self.v = v
-    def __str__(self):
+    def __repr__(self):
         return "Var " + str(self.v)
 
 class Binop(Expr):
@@ -54,7 +54,7 @@ class Binop(Expr):
         self.op = op
         self.left = left
         self.right = right
-    def __str__(self):
+    def __repr__(self):
         return "Binop " + str(self.op) + "(" + str(self.left) + ", " + str(self.right) + ")"
 
 class Unop(Expr):
@@ -63,13 +63,13 @@ class Unop(Expr):
         util.typecheck(exp, Expr)
         self.op = op
         self.exp = exp
-    def __str__(self):
+    def __repr__(self):
         return "Unop " + str(self.op) + "(" + str(self.exp) + ")"
 
 class Skip(Command):
     def __init__(self):
         pass
-    def __str__(self):
+    def __repr__(self):
         return "Skip\n"
 
 class Assign(Command):
@@ -78,7 +78,7 @@ class Assign(Command):
         util.typecheck(exp, Expr)
         self.var = var
         self.exp = exp        
-    def __str__(self):
+    def __repr__(self):
         return "Assign\n" + str(self.var) + "\n=\n" + str(self.exp)
 
 class Seq(Command):
@@ -87,7 +87,7 @@ class Seq(Command):
         util.typecheck(c2, Command)
         self.c1 = c1
         self.c2 = c2      
-    def __str__(self):
+    def __repr__(self):
         return str(self.c1) + "\n;\n" + str(self.c2)
 
 class IfElse(Command):
@@ -96,7 +96,7 @@ class IfElse(Command):
         util.typecheck(c, Command)
         self.b = b
         self.c = c
-    def __str__(self):
+    def __repr__(self):
         return "If\n" + str(self.b) + "\n{\n" + str(self.c) + "\n}\n"
 
 class While(Command):
@@ -105,26 +105,26 @@ class While(Command):
         util.typecheck(c, Command)
         self.b = b
         self.c = c
-    def __str__(self):
+    def __repr__(self):
         return "While\n" + str(self.b) + "\n{\n" + str(self.c) + "\n}\n"
 
 class Print(Command):
     def __init__(self, exp : Expr):
         util.typecheck(exp, Expr)
         self.exp = exp
-    def __str__(self):
+    def __repr__(self):
         return "Print\n" + str(self.exp)
 
 class Input(Command):
     def __init__(self, var : Var):
         util.typecheck(var, Var)
         self.var = var
-    def __str__(self):
+    def __repr__(self):
         return "Input\n" + str(self.var)
 
 class Program:
     def __init__(self, c : Command):
         util.typecheck(c, Command)
         self.c = c
-    def __str__(self):
+    def __repr__(self):
         return "Program\n" + str(self.c)

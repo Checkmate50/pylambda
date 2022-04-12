@@ -14,23 +14,24 @@ class ParsingExpectException(ParsingException):
         # Call the base class constructor with the parameters it needs
         super().__init__("expected " + str(expect) + ", got " + str(word))
 
-class ParsingState(AbstractClass):
+class ParsingState(BaseClass):
     pass
 
-class Lookahead(AbstractClass):
+class Lookahead(BaseClass):
     def __init__(self, lookahead):
         if not (lookahead == lookahead_binop or lookahead == lookahead_expr):
             raise InternalException("expected lookahead, got " + str(lookahead))
         self.lookahead = lookahead
-    def __str__(self):
+    def __repr__(self):
         return "LOOKAHEAD " + str(self.unpack.__name__)
 
-class PartialASTElement(AbstractClass):
-    def __init__(self, cmd : ast.Command, args : List[AbstractClass]):
+class PartialASTElement(BaseClass):
+    def __init__(self, cmd : ast.Command, args : List[BaseClass]):
         self.cmd = cmd
         self.args = args
         self.index = -1
-    def append(self, arg : AbstractClass):
+
+    def append(self, arg : BaseClass):
         if self.index == -1:
             self.args.append(arg)
             # Ok, this is _super_ janky, but control flow for command appending is done here
@@ -40,44 +41,48 @@ class PartialASTElement(AbstractClass):
                 self.index = 0
         else:
             if not isinstance(self.args[self.index], PartialASTElement):
-                raise InternalException("Attempting to append to non-AST element " + 
+                raise InternalException("Attempting to append to non-Partial element " + 
                 str(self.args[self.index]) + " at index " + str(self.index))
             self.args[self.index].append(arg) # Wow, that's a lotta recursion
-    def overwrite(self, arg : AbstractClass):
+
+    def overwrite(self, arg : BaseClass):
         if self.index == -1:
             self.args[-1] = arg
         else:
             if not isinstance(self.args[self.index], PartialASTElement):
-                raise InternalException("Attempting to overwrite non-AST element " + 
+                raise InternalException("Attempting to overwrite non-Partial element " + 
                 str(self.args[self.index]) + " at index " + str(self.index))
             self.args[self.index].overwrite(arg)
+
     def pack_next(self):
         if self.index == -1:
             raise InternalException("Attempting to pack internal of unindexed partial element " + str(self))
         if not isinstance(self.args[self.index], PartialASTElement):
-            raise InternalException("Attempting to pack internal of non-AST element " + 
+            raise InternalException("Attempting to pack internal of non-Partial element " + 
                 str(self.args[self.index]) + " at index " + str(self.index))
         self.args[self.index].pack()
         self.index += 1
+
     def pack(self):
         try:
-            packed = [arg.pack() if isinstance(arg, PartialCommand) else arg for arg in self.args]
+            packed = [arg.pack() if isinstance(arg, PartialASTElement) else arg for arg in self.args]
             return self.cmd(*packed)
         except TypeError:
             raise ParsingException("wrong number of arguments to " + 
                 str(self.cmd.__name__) + " (" + str(len(self.args)) + " given)")
+
     def is_partial(self):
         return isinstance(self.cmd, PartialCommand)
 
 class PartialCommand(PartialASTElement):
-    def __str__(self):
+    def __repr__(self):
         return "PARTIAL_COMMAND " + str(self.cmd) + " " + str(self.args)
 
 class PartialExpression(PartialASTElement):
-    def __str__(self):
+    def __repr__(self):
         return "PARTIAL_EXPRESSION " + str(self.cmd) + " " + str(self.args)
 
-class ParserState(AbstractClass):
+class ParserState(BaseClass):
     def __init__(self):
         self.next = None
         self.scope = []
@@ -93,7 +98,7 @@ class ParserState(AbstractClass):
     def set_state(self, state : ParsingState):
         typecheck(state, ParsingState)
         self.state = state
-    def __str__(self):
+    def __repr__(self):
         return "STATE: " + str(self.next)
 
 # So it's sorta weird, but these lookahead functions "manage" the control flow of the parser
@@ -118,7 +123,6 @@ def expect_binop(word : str, result : PartialCommand, state : ParserState) -> Pa
     if word in ("+", "-", "*", "^", "==", "<", ">", "<=", ">=", "and", "or"):
         state.update(Lookahead(lookahead_expr))
         result.append(PartialExpression(ast.Binop, [(ast.Op(word))]))
-        result.append(ast.Op(word))
     else:
         raise ParsingExpectException("binary operation", word)
     return result
