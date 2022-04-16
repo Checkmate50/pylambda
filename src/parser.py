@@ -23,14 +23,14 @@ class OpenParen(ast.Expr):
         return "OpenParen"
 
 class ParsingException(Exception):
-    def __init__(self, message : str):
+    def __init__(self, message : str, state):
         # Call the base class constructor with the parameters it needs
-        super().__init__("Parsing error: " + str(message))
+        super().__init__("Parsing error on line " + str(state.line_number) + ": " + str(message))
 
 class ParsingExpectException(ParsingException):
-    def __init__(self, expect : str, word : str):
+    def __init__(self, expect : str, word : str, state):
         # Call the base class constructor with the parameters it needs
-        super().__init__("expected " + str(expect) + ", got " + str(word))
+        super().__init__("expected " + str(expect) + ", got " + str(word), state)
 
 class ParsingState(BaseClass):
     pass
@@ -119,6 +119,7 @@ class ParserState(BaseClass):
     def __init__(self):
         self.next = None
         self.state = None
+        self.line_number = 0
         self.ops : List[PartialExpression] = []
         self.args : List[PartialASTElement] = []
         self.scope : List[PartialASTElement] = []
@@ -168,13 +169,13 @@ class ParserState(BaseClass):
     def clean_ops(self, result : PartialASTElement, is_paren : bool):
         typecheck(result, PartialASTElement)
         if is_paren and not self.ops:
-            raise ParsingException("Unmatched )")
+            raise ParsingException("Unmatched )", self)
         while (is_paren and not self.ops[-1].cmd == OpenParen) or (not is_paren and self.ops):
             if not is_paren and self.ops[-1].cmd == OpenParen:
-                raise ParsingException("Unmatched (")
+                raise ParsingException("Unmatched (", self)
             self.pop_op()
             if is_paren and not self.ops:
-                raise ParsingException("Unmatched )")
+                raise ParsingException("Unmatched )", self)
         if is_paren and self.ops[-1].cmd == OpenParen:
             self.pop_op()
         if not is_paren:
@@ -226,7 +227,7 @@ def expect_binop(word : str, result : PartialCommand, state : ParserState) -> Pa
         state.update(Lookahead(lookahead_expr))
         state.push_op(PartialExpression(ast.Binop, [ast.Op(word)]))
         return result
-    raise ParsingExpectException("binary operation", word)
+    raise ParsingExpectException("binary operation", word, state)
 
 def expect_unop(word : str, result : PartialCommand, state : ParserState) -> PartialExpression:
     if not (word == "-" or word == "not"):
@@ -251,24 +252,24 @@ def expect_const(word : str, result : PartialCommand, state : ParserState) -> Pa
     elif word == "false":
         state.push_arg(ast.Const(ast.Bool(False)))
     elif word in reserved:
-        raise ParsingException("use of reserved keyword as variable " + word)
+        raise ParsingException("use of reserved keyword as variable " + word, state)
     elif word.isidentifier():
         state.push_arg(ast.Var(word))
     else:
-        raise ParsingExpectException("constant, unary operation, or variable", word)
+        raise ParsingExpectException("constant, unary operation, or variable", word, state)
     return result
 
 def expect_assign(word : str, result : PartialCommand, state : ParserState) -> PartialASTElement:
     if word != "=":
-        raise ParsingExpectException("=", word)
+        raise ParsingExpectException("=", word, state)
     state.update(Lookahead(lookahead_expr))
     return result # No append, just looking stuff up
 
 def expect_var(word : str, result : PartialCommand, state : ParserState) -> PartialASTElement:
     if word in reserved:
-        raise ParsingException("use of reserved keyword as variable " + word)
+        raise ParsingException("use of reserved keyword as variable " + word, state)
     if not word.isidentifier():
-        raise ParsingExpectException("variable", word)
+        raise ParsingExpectException("variable", word, state)
     state.update(expect_semi)
     result.append(ast.Var(word))
     return result
@@ -284,12 +285,12 @@ def expect_command(word : str, result : Optional[PartialCommand], state : Parser
         state.update(expect_var)
         cmd = PartialCommand(ast.Input, [])
     elif word in reserved:
-        raise ParsingException("attempting to assign to reserved keyword " + str(word))
+        raise ParsingException("attempting to assign to reserved keyword " + str(word), state)
     elif word.isidentifier():
         state.update(expect_assign)
         cmd = PartialCommand(ast.Assign, [ast.Var(word)])
     else:
-        raise ParsingExpectException("a command" + word)
+        raise ParsingExpectException("a command" + word, state)
     if result is None:
         return cmd
     result.append(cmd)
@@ -333,10 +334,11 @@ def parse_file(filename : str) -> ast.Program:
     with open(filename, 'r') as f:
         for line in f:
             result = parse(line, result, state)
+            state.line_number += 1
     if result is None:
         return ast.Program(ast.Skip)  # default program
     try:
         result = result.pack()
     except:
-        raise ParsingException("incomplete final command " + str(result.cmd.__name__))
+        raise ParsingException("incomplete final command " + str(result.cmd.__name__), state)
     return ast.Program(result)
