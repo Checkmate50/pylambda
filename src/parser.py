@@ -15,6 +15,13 @@ def is_lower_precedence(op1 : ast.Op, op2 = ast.Op) -> bool:
             return False
     raise InternalException(str(op1) + " is not in the precedence list")
 
+# Dummy class for the expr stack
+class OpenParen(ast.Expr):
+    def __init__(self):
+        pass
+    def __repr__(self):
+        return "OpenParen"
+
 class ParsingException(Exception):
     def __init__(self, message : str):
         # Call the base class constructor with the parameters it needs
@@ -126,17 +133,21 @@ class ParserState(BaseClass):
 
     def push_op(self, cmd : PartialExpression):
         typecheck(cmd, PartialExpression)
-        if not ((cmd.cmd == ast.Binop) or (cmd.cmd == ast.Unop)):
+        if not ((cmd.cmd == ast.Binop) or (cmd.cmd == ast.Unop) or cmd.cmd == OpenParen):
             raise InternalException("Expected Binop or Unop, got " + str(cmd.cmd))
-        if cmd.cmd == ast.Unop:
+        if cmd.cmd == ast.Unop or cmd.cmd == OpenParen:
             self.ops.append(cmd)
             return
-        if len(self.ops) > 0 and is_lower_precedence(cmd.args[0], self.ops[-1].args[0]):
+        if len(self.ops) > 0 \
+        and self.ops[-1].cmd != OpenParen \
+        and is_lower_precedence(cmd.args[0], self.ops[-1].args[0]):
             self.pop_op()
         self.ops.append(cmd) 
 
     def pop_op(self):
         op = self.ops.pop()
+        if op.cmd == OpenParen:
+            return
         arg1 = self.pop_arg()
         if op.cmd == ast.Binop:
             # Disentangle the stack
@@ -154,12 +165,21 @@ class ParserState(BaseClass):
     def pop_arg(self) -> Union[PartialExpression, ast.Expr]:
         return self.args.pop()
 
-    def clean_ops(self, result : PartialASTElement):
+    def clean_ops(self, result : PartialASTElement, is_paren : bool):
         typecheck(result, PartialASTElement)
-        while self.ops:
+        if is_paren and not self.ops:
+            raise ParsingException("Unmatched )")
+        while (is_paren and not self.ops[-1].cmd == OpenParen) or (not is_paren and self.ops):
+            if not is_paren and self.ops[-1].cmd == OpenParen:
+                raise ParsingException("Unmatched (")
             self.pop_op()
-        while self.args:
-            result.append(self.pop_arg())
+            if is_paren and not self.ops:
+                raise ParsingException("Unmatched )")
+        if is_paren and self.ops[-1].cmd == OpenParen:
+            self.pop_op()
+        if not is_paren:
+            while self.args:
+                result.append(self.pop_arg())
 
     def scope_in(self, cmd : PartialASTElement):
         typecheck(cmd, PartialASTElement)
@@ -174,20 +194,32 @@ class ParserState(BaseClass):
 def lookahead_binop(word : str, result : PartialCommand, state : ParserState):
     if word == ";":
         state.update(expect_semi)
+    elif word == ")":
+        state.update(expect_close_paren)
     else:
         state.update(expect_binop)
 
 def lookahead_expr(word : str, result : PartialCommand, state : ParserState):
     if word in ("-", "not"):
         state.update(expect_unop)
+    elif word == "(":
+        state.update(expect_open_paren)
     else:
         state.update(expect_const)
 
-# Must follow from lookahead_semi
 def expect_semi(word : str, result : PartialCommand, state : ParserState) -> PartialASTElement:
+    if not word == ";":
+        raise InternalException("Expected ; got " + str(word))
     state.update(expect_command)
-    state.clean_ops(result)
+    state.clean_ops(result, False)
     return PartialCommand(ast.Seq, [result.pack()])
+
+def expect_close_paren(word :str, result : PartialCommand, state : ParserState) -> PartialExpression:
+    if not word == ")":
+        raise InternalException("Expected ) got " + str(word))
+    state.update(Lookahead(lookahead_binop))
+    state.clean_ops(result, True)
+    return result
 
 def expect_binop(word : str, result : PartialCommand, state : ParserState) -> PartialExpression:
     if word in ("+", "-", "*", "^", "==", "<", ">", "<=", ">=", "and", "or"):
@@ -195,6 +227,20 @@ def expect_binop(word : str, result : PartialCommand, state : ParserState) -> Pa
         state.push_op(PartialExpression(ast.Binop, [ast.Op(word)]))
         return result
     raise ParsingExpectException("binary operation", word)
+
+def expect_unop(word : str, result : PartialCommand, state : ParserState) -> PartialExpression:
+    if not (word == "-" or word == "not"):
+        raise InternalException("Expected Unop got " + str(word))
+    state.update(Lookahead(lookahead_expr))
+    state.push_op(PartialExpression(ast.Unop, [(ast.Op(word))])) # we can do this cause we already did the lookahead
+    return result
+
+def expect_open_paren(word :str, result : PartialCommand, state : ParserState) -> PartialExpression:
+    if not word == "(":
+        raise InternalException("Expected ( got " + str(word))
+    state.update(Lookahead(lookahead_expr))
+    state.push_op(PartialExpression(OpenParen, []))
+    return result
 
 def expect_const(word : str, result : PartialCommand, state : ParserState) -> PartialASTElement:
     state.update(Lookahead(lookahead_binop))
@@ -210,12 +256,6 @@ def expect_const(word : str, result : PartialCommand, state : ParserState) -> Pa
         state.push_arg(ast.Var(word))
     else:
         raise ParsingExpectException("constant, unary operation, or variable", word)
-    return result
-
-# Must follow from lookahead_unop
-def expect_unop(word : str, result : PartialCommand, state : ParserState) -> PartialExpression:
-    state.update(Lookahead(lookahead_expr))
-    state.push_op(PartialExpression(ast.Unop, [(ast.Op(word))])) # we can do this cause we already did the lookahead
     return result
 
 def expect_assign(word : str, result : PartialCommand, state : ParserState) -> PartialASTElement:
