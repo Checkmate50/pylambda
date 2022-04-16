@@ -4,4 +4,4 @@ print 1 + 2;
 print 2 - 1;
 x = 2;
 print x * 3;
-print 3 ^ x + 1;
+print 3 + x ^ 2;

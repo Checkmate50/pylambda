@@ -1,4 +1,4 @@
-from sys import argv, setrecursionlimit
+from sys import argv
 from src.parser import parse_file
 
 def help():
@@ -8,7 +8,6 @@ def main():
     if len(argv) < 2:
         help()
         exit()
-    setrecursionlimit(10000)
     print(parse_file(argv[1]))
 
 if __name__=="__main__":

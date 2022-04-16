@@ -1,8 +1,19 @@
 import src.ast as ast
 from src.util import *
-from typing import List, Optional
+from typing import List, Optional, Union
 
 reserved = ("true", "false", "print", "input", "output", "while", "if")
+
+# This is actually so cool
+binop_precedence = [("and", "or"), ("==", "<", ">", "<=", ">="), ("+", "-"), ("*"), ("^")]
+
+def is_lower_precedence(op1 : ast.Op, op2 = ast.Op) -> bool:
+    for prec in binop_precedence:
+        if op1.op in prec:
+            return True # right-associative
+        if op2.op in prec:
+            return False
+    raise InternalException(str(op1) + " is not in the precedence list")
 
 class ParsingException(Exception):
     def __init__(self, message : str):
@@ -31,35 +42,50 @@ class PartialASTElement(BaseClass):
         self.args = args
         self.index = -1
 
+    def index_check(self, fun : str):
+        if not isinstance(self.args[self.index], PartialASTElement):
+                raise InternalException("Attempting to " + str(fun) + " on non-Partial element " + 
+                str(self.args[self.index]) + " at index " + str(self.index))
+
+    def set_index(self, arg : BaseClass):
+        # Ok, this is _super_ janky, but control flow for command appending is done here
+        if self.cmd == ast.Seq:
+            self.index = 1
+        if isinstance(arg, PartialExpression):
+            self.index = len(self.args)-1
+
     def append(self, arg : BaseClass):
         if self.index == -1:
             self.args.append(arg)
-            # Ok, this is _super_ janky, but control flow for command appending is done here
-            if self.cmd == ast.Seq:
-                self.index = 1
-            if isinstance(arg, PartialExpression):
-                self.index = 0
+            self.set_index(arg)
         else:
-            if not isinstance(self.args[self.index], PartialASTElement):
-                raise InternalException("Attempting to append to non-Partial element " + 
-                str(self.args[self.index]) + " at index " + str(self.index))
+            self.index_check("append")
             self.args[self.index].append(arg) # Wow, that's a lotta recursion
 
     def overwrite(self, arg : BaseClass):
         if self.index == -1:
-            self.args[-1] = arg
+            if self.cmd == ast.Binop:
+                self.args[-1] = arg
+                self.args.pop(-2)
+            else:
+                self.args = [arg]
+            self.set_index(arg)
         else:
-            if not isinstance(self.args[self.index], PartialASTElement):
-                raise InternalException("Attempting to overwrite non-Partial element " + 
-                str(self.args[self.index]) + " at index " + str(self.index))
+            self.index_check("overwrite")
             self.args[self.index].overwrite(arg)
+        
+    def latest(self):
+        if self.index == -1:
+            if self.cmd == ast.Binop:
+                return self.args[-2:]
+            return self.args
+        self.index_check("use latest")
+        return self.args[self.index].latest()
 
     def pack_next(self):
         if self.index == -1:
             raise InternalException("Attempting to pack internal of unindexed partial element " + str(self))
-        if not isinstance(self.args[self.index], PartialASTElement):
-            raise InternalException("Attempting to pack internal of non-Partial element " + 
-                str(self.args[self.index]) + " at index " + str(self.index))
+        self.index_check("pack_next")
         self.args[self.index].pack()
         self.index += 1
 
@@ -72,32 +98,75 @@ class PartialASTElement(BaseClass):
                 str(self.cmd.__name__) + " (" + str(len(self.args)) + " given)")
 
     def is_partial(self):
-        return isinstance(self.cmd, PartialCommand)
+        return isinstance(self.cmd, PartialASTElement)
 
 class PartialCommand(PartialASTElement):
     def __repr__(self):
-        return "PARTIAL_COMMAND " + str(self.cmd) + " " + str(self.args)
+        return "PARTIAL_COMMAND " + str(self.cmd) + " " + str(self.args) + " " + str(self.index)
 
 class PartialExpression(PartialASTElement):
     def __repr__(self):
-        return "PARTIAL_EXPRESSION " + str(self.cmd) + " " + str(self.args)
+        return "PARTIAL_EXPRESSION " + str(self.cmd) + " " + str(self.args) + " " + str(self.index)
 
 class ParserState(BaseClass):
     def __init__(self):
         self.next = None
-        self.scope = []
         self.state = None
+        self.ops : List[PartialExpression] = []
+        self.args : List[PartialASTElement] = []
+        self.scope : List[PartialASTElement] = []
     def update(self, next):
         if not (isinstance(next, Lookahead) or callable(next)):
             raise InternalException("expected a function, got " + str(next))
         self.next = next
-    def scope_in(self, cmd : PartialCommand):
-        self.scope.append(cmd)
-    def scope_out(self) -> PartialCommand:
-        return self.scope.pop()
+    
     def set_state(self, state : ParsingState):
         typecheck(state, ParsingState)
         self.state = state
+
+    def push_op(self, cmd : PartialExpression):
+        typecheck(cmd, PartialExpression)
+        if not ((cmd.cmd == ast.Binop) or (cmd.cmd == ast.Unop)):
+            raise InternalException("Expected Binop or Unop, got " + str(cmd.cmd))
+        if cmd.cmd == ast.Unop:
+            self.ops.append(cmd)
+            return
+        if len(self.ops) > 0 and is_lower_precedence(cmd.args[0], self.ops[-1].args[0]):
+            self.pop_op()
+        self.ops.append(cmd) 
+
+    def pop_op(self):
+        op = self.ops.pop()
+        arg1 = self.pop_arg()
+        if op.cmd == ast.Binop:
+            # Disentangle the stack
+            op.args.append(self.pop_arg())
+        op.args.append(arg1)
+        self.push_arg(op)
+
+    def push_arg(self, arg : Union[PartialExpression, ast.Expr]):
+        if not isinstance(arg, PartialExpression):
+            typecheck(arg, ast.Expr)
+        self.args.append(arg)
+        if len(self.ops) > 0 and self.ops[-1].cmd == ast.Unop:
+            self.pop_op() # unop arg comes after
+
+    def pop_arg(self) -> Union[PartialExpression, ast.Expr]:
+        return self.args.pop()
+
+    def clean_ops(self, result : PartialASTElement):
+        typecheck(result, PartialASTElement)
+        while self.ops:
+            self.pop_op()
+        while self.args:
+            result.append(self.pop_arg())
+
+    def scope_in(self, cmd : PartialASTElement):
+        typecheck(cmd, PartialASTElement)
+        self.scope.append(cmd)
+    def scope_out(self) -> PartialASTElement:
+        return self.scope.pop()
+
     def __repr__(self):
         return "STATE: " + str(self.next)
 
@@ -117,28 +186,28 @@ def lookahead_expr(word : str, result : PartialCommand, state : ParserState):
 # Must follow from lookahead_semi
 def expect_semi(word : str, result : PartialCommand, state : ParserState) -> PartialASTElement:
     state.update(expect_command)
+    state.clean_ops(result)
     return PartialCommand(ast.Seq, [result.pack()])
 
 def expect_binop(word : str, result : PartialCommand, state : ParserState) -> PartialExpression:
     if word in ("+", "-", "*", "^", "==", "<", ">", "<=", ">=", "and", "or"):
         state.update(Lookahead(lookahead_expr))
-        result.append(PartialExpression(ast.Binop, [(ast.Op(word))]))
-    else:
-        raise ParsingExpectException("binary operation", word)
-    return result
+        state.push_op(PartialExpression(ast.Binop, [ast.Op(word)]))
+        return result
+    raise ParsingExpectException("binary operation", word)
 
 def expect_const(word : str, result : PartialCommand, state : ParserState) -> PartialASTElement:
     state.update(Lookahead(lookahead_binop))
     if word.isdigit():
-        result.append(ast.Const(ast.Number(int(word))))
+        state.push_arg(ast.Const(ast.Number(int(word))))
     elif word == "true":
-        result.append(ast.Const(ast.Bool(True)))
+        state.push_arg(ast.Const(ast.Bool(True)))
     elif word == "false":
-        result.append(ast.Const(ast.Bool(False)))
+        state.push_arg(ast.Const(ast.Bool(False)))
     elif word in reserved:
         raise ParsingException("use of reserved keyword as variable " + word)
     elif word.isidentifier():
-        result.append(ast.Var(word))
+        state.push_arg(ast.Var(word))
     else:
         raise ParsingExpectException("constant, unary operation, or variable", word)
     return result
@@ -146,7 +215,7 @@ def expect_const(word : str, result : PartialCommand, state : ParserState) -> Pa
 # Must follow from lookahead_unop
 def expect_unop(word : str, result : PartialCommand, state : ParserState) -> PartialExpression:
     state.update(Lookahead(lookahead_expr))
-    result.append(PartialExpression(ast.Unop, [(ast.Op(word))])) # we can do this cause we already did the lookahead
+    state.push_op(PartialExpression(ast.Unop, [(ast.Op(word))])) # we can do this cause we already did the lookahead
     return result
 
 def expect_assign(word : str, result : PartialCommand, state : ParserState) -> PartialASTElement:
@@ -189,28 +258,32 @@ def expect_command(word : str, result : Optional[PartialCommand], state : Parser
 def parse_line(line : List[str], 
   result : Optional[PartialCommand], 
   state : ParserState) -> Optional[PartialCommand]:
-    if len(line) == 0:
-        return result
-    if line[0].startswith("//"): #Comments 
-        return result
-    word = line[0]
-    nxt = line[1:]
-    if result is None:
-        comm = expect_command(word, None, state)
-        return parse_line(nxt, comm, state)
-    if isinstance(state.next, Lookahead):
-        state.next.lookahead(word, result, state)
-        return parse_line(line, result, state)
-    result = state.next(word, result, state)
-    return parse_line(nxt, result, state)
+    while line:
+        if line[0].startswith("//"): #Comments 
+            return result
+        word = line[0]
+        if result is None:
+            result = expect_command(word, None, state)
+            line.pop(0)
+        elif isinstance(state.next, Lookahead):
+            state.next.lookahead(word, result, state)
+        else:
+            result = state.next(word, result, state)
+            line.pop(0)
+    return result
 
 def parse(line : str, 
   result : Optional[PartialCommand], 
   state : ParserState) -> Optional[PartialCommand]:
     line = line.strip() # who needs whitespace anyway
-    tokens = ";=+-*^"
+    # "Lex" the line -- yes, this is janky, yes I'm too lazy to fix it
+    tokens = ";=+-*^()<>"
     for token in tokens:
         line = line.replace(token, f" {token} ")
+    # Special 2-character symbols
+    line = line.replace("=  =", "==") # yes, this is dumb, but it works, ok?
+    line = line.replace(">  =", ">=")
+    line = line.replace("<  =", "<=")
     line = line.split()
     return parse_line(line, result, state)
 

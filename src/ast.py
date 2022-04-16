@@ -37,7 +37,7 @@ class Op(util.BaseClass):
         util.typecheck(op, str)
         self.op = op
     def __repr__(self):
-        return self.op
+        return "Op " + str(self.op)
 
 class Var(Expr):
     def __init__(self, v : str):
@@ -48,6 +48,7 @@ class Var(Expr):
 
 class Binop(Expr):
     def __init__(self, op : Op, left : Expr, right : Expr):
+        # Note that op comes first cause of precedence stack crap
         util.typecheck(op, Op)
         util.typecheck(left, Expr)
         util.typecheck(right, Expr)
