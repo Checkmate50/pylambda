@@ -68,58 +68,71 @@ class Unop(Expr):
         return "Unop " + str(self.op) + "(" + str(self.exp) + ")"
 
 class Skip(Command):
-    def __init__(self):
-        pass
+    def __init__(self, ln : int):
+        util.typecheck(ln, int)
+        self.ln = ln
     def __repr__(self):
         return "Skip\n"
 
 class Assign(Command):
-    def __init__(self, var : Var, exp : Expr):
+    def __init__(self, ln : int, var : Var, exp : Expr):
         util.typecheck(var, Var)
         util.typecheck(exp, Expr)
+        util.typecheck(ln, int)
         self.var = var
-        self.exp = exp        
+        self.exp = exp
+        self.ln = ln
     def __repr__(self):
         return "Assign\n" + str(self.var) + "\n=\n" + str(self.exp)
 
 class Seq(Command):
-    def __init__(self, c1 : Command, c2 : Command = Skip()):
+    def __init__(self, ln : int, c1 : Command, c2 : Command = Skip()):
         util.typecheck(c1, Command)
         util.typecheck(c2, Command)
+        util.typecheck(ln, int)
         self.c1 = c1
-        self.c2 = c2      
+        self.c2 = c2
+        self.ln = ln
     def __repr__(self):
         return str(self.c1) + "\n;\n" + str(self.c2)
 
 class IfElse(Command):
-    def __init__(self, b : Expr, c : Command):
+    def __init__(self, ln : int, b : Expr, c : Command):
         util.typecheck(b, Expr)
         util.typecheck(c, Command)
+        util.typecheck(ln, int)
         self.b = b
         self.c = c
+        self.ln = ln
     def __repr__(self):
         return "If\n" + str(self.b) + "\n{\n" + str(self.c) + "\n}\n"
 
 class While(Command):
-    def __init__(self, b : Expr, c : Command):
+    def __init__(self, ln : int, b : Expr, c : Command):
         util.typecheck(b, Expr)
         util.typecheck(c, Command)
+        util.typecheck(ln, int)
         self.b = b
         self.c = c
+        self.ln = ln
     def __repr__(self):
         return "While\n" + str(self.b) + "\n{\n" + str(self.c) + "\n}\n"
 
 class Print(Command):
-    def __init__(self, exp : Expr):
+    def __init__(self, ln : int, exp : Expr):
         util.typecheck(exp, Expr)
+        util.typecheck(ln, int)
         self.exp = exp
+        self.ln = ln
     def __repr__(self):
         return "Print\n" + str(self.exp)
 
 class Input(Command):
-    def __init__(self, var : Var):
+    def __init__(self, ln : int, var : Var):
         util.typecheck(var, Var)
+        util.typecheck(ln, int)
         self.var = var
+        self.ln = ln
     def __repr__(self):
         return "Input\n" + str(self.var)
 

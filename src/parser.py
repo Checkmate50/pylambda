@@ -277,18 +277,18 @@ def expect_var(word : str, result : PartialCommand, state : ParserState) -> Part
 def expect_command(word : str, result : Optional[PartialCommand], state : ParserState) -> PartialCommand:
     if word == "skip":
         state.update(expect_semi)
-        cmd = PartialCommand(ast.Skip, [])
+        cmd = PartialCommand(ast.Skip, [state.line_number])
     elif word == "print":
         state.update(Lookahead(lookahead_expr))
-        cmd = PartialCommand(ast.Print, [])
+        cmd = PartialCommand(ast.Print, [state.line_number])
     elif word == "input":
         state.update(expect_var)
-        cmd = PartialCommand(ast.Input, [])
+        cmd = PartialCommand(ast.Input, [state.line_number])
     elif word in reserved:
         raise ParsingException("attempting to assign to reserved keyword " + str(word), state)
     elif word.isidentifier():
         state.update(expect_assign)
-        cmd = PartialCommand(ast.Assign, [ast.Var(word)])
+        cmd = PartialCommand(ast.Assign, [state.line_number, ast.Var(word)])
     else:
         raise ParsingExpectException("a command" + word, state)
     if result is None:
