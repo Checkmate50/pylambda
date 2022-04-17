@@ -9,7 +9,7 @@ class Expr(util.BaseClass):
 class Value(util.BaseClass):
     pass
 
-class Command(util.BaseClass):
+class Statement(util.BaseClass):
     pass
 
 class Number(Value):
@@ -68,14 +68,14 @@ class Unop(Expr):
     def __repr__(self):
         return "Unop " + str(self.op) + "(" + str(self.exp) + ")"
 
-class Skip(Command):
+class Skip(Statement):
     def __init__(self, ln : int):
         util.typecheck(ln, int)
         self.ln = ln
     def __repr__(self):
         return "Skip\n"
 
-class Assign(Command):
+class Assign(Statement):
     def __init__(self, ln : int, var : Var, exp : Expr):
         util.typecheck(ln, int)
         util.typecheck(var, Var)
@@ -87,11 +87,11 @@ class Assign(Command):
     def __repr__(self):
         return "Assign\n" + str(self.var) + "\n=\n" + str(self.exp)
 
-class Seq(Command):
-    def __init__(self, ln : int, c1 : Command, c2 : Command = Skip()):
+class Seq(Statement):
+    def __init__(self, ln : int, c1 : Statement, c2 : Statement = Skip()):
         util.typecheck(ln, int)
-        util.typecheck(c1, Command)
-        util.typecheck(c2, Command)
+        util.typecheck(c1, Statement)
+        util.typecheck(c2, Statement)
 
         self.ln = ln
         self.c1 = c1
@@ -99,12 +99,12 @@ class Seq(Command):
     def __repr__(self):
         return str(self.c1) + "\n;\n" + str(self.c2)
 
-class If(Command):
-    def __init__(self, ln : int, b : Expr, c : Command, e : Command = Skip()):
+class If(Statement):
+    def __init__(self, ln : int, b : Expr, c : Statement, e : Statement = Skip()):
         util.typecheck(ln, int)
         util.typecheck(b, Expr)
-        util.typecheck(c, Command)
-        util.typecheck(e, Command)
+        util.typecheck(c, Statement)
+        util.typecheck(e, Statement)
         
         self.ln = ln
         self.b = b
@@ -113,21 +113,21 @@ class If(Command):
     def __repr__(self):
         return "If\n" + str(self.b) + "\n{\n" + str(self.c) + "\n}\n"
 
-class Else(Command):
-    def __init__(self, ln : int, c : Command):
+class Else(Statement):
+    def __init__(self, ln : int, c : Statement):
         util.typecheck(ln, int)
-        util.typecheck(c, Command)
+        util.typecheck(c, Statement)
         
         self.ln = ln
         self.c = c
     def __repr__(self):
         return "If\n" + str(self.b) + "\n{\n" + str(self.c) + "\n}\n"
 
-class While(Command):
-    def __init__(self, ln : int, b : Expr, c : Command):
+class While(Statement):
+    def __init__(self, ln : int, b : Expr, c : Statement):
         util.typecheck(ln, int)
         util.typecheck(b, Expr)
-        util.typecheck(c, Command)
+        util.typecheck(c, Statement)
 
         self.ln = ln
         self.b = b
@@ -135,7 +135,7 @@ class While(Command):
     def __repr__(self):
         return "While\n" + str(self.b) + "\n{\n" + str(self.c) + "\n}\n"
 
-class Print(Command):
+class Print(Statement):
     def __init__(self, ln : int, exp : Expr):
         util.typecheck(ln, int)
         util.typecheck(exp, Expr)
@@ -145,7 +145,7 @@ class Print(Command):
     def __repr__(self):
         return "Print\n" + str(self.exp)
 
-class Input(Command):
+class Input(Statement):
     def __init__(self, ln : int, var : Var):
         util.typecheck(ln, int)
         util.typecheck(var, Var)
@@ -156,8 +156,8 @@ class Input(Command):
         return "Input\n" + str(self.var)
 
 class Program:
-    def __init__(self, c : Command):
-        util.typecheck(c, Command)
+    def __init__(self, c : Statement):
+        util.typecheck(c, Statement)
         self.c = c
     def __repr__(self):
         return "Program\n" + str(self.c)

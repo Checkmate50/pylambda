@@ -2,7 +2,7 @@ import src.ast as ast
 from src.util import *
 from typing import List, Optional, Union
 
-reserved = ("true", "false", "print", "input", "output", "while", "if")
+reserved = ("true", "false", "print", "input", "output", "while", "if", "else")
 
 # This is actually so cool
 binop_precedence = [("and", "or"), ("==", "<", ">", "<=", ">="), ("+", "-"), ("*"), ("^")]
@@ -35,6 +35,10 @@ class ParsingExpectException(ParsingException):
 class ParsingState(BaseClass):
     pass
 
+class IfState(ParsingState):
+    def __init__(self):
+        pass
+
 class Lookahead(BaseClass):
     def __init__(self, lookahead):
         if not (lookahead == lookahead_binop or lookahead == lookahead_expr):
@@ -44,7 +48,7 @@ class Lookahead(BaseClass):
         return "LOOKAHEAD " + str(self.unpack.__name__)
 
 class PartialASTElement(BaseClass):
-    def __init__(self, cmd : ast.Command, args : List[BaseClass]):
+    def __init__(self, cmd : ast.Statement, args : List[BaseClass]):
         self.cmd = cmd
         self.args = args
         self.index = -1
@@ -55,7 +59,7 @@ class PartialASTElement(BaseClass):
                 str(self.args[self.index]) + " at index " + str(self.index))
 
     def set_index(self, arg : BaseClass):
-        # Ok, this is _super_ janky, but control flow for command appending is done here
+        # Ok, this is _super_ janky, but control flow for Statement appending is done here
         if self.cmd == ast.Seq:
             self.index = 1
         if isinstance(arg, PartialExpression):
@@ -107,9 +111,9 @@ class PartialASTElement(BaseClass):
     def is_partial(self):
         return isinstance(self.cmd, PartialASTElement)
 
-class PartialCommand(PartialASTElement):
+class PartialStatement(PartialASTElement):
     def __repr__(self):
-        return "PARTIAL_COMMAND " + str(self.cmd) + " " + str(self.args) + " " + str(self.index)
+        return "PARTIAL_Statement " + str(self.cmd) + " " + str(self.args) + " " + str(self.index)
 
 class PartialExpression(PartialASTElement):
     def __repr__(self):
@@ -118,7 +122,7 @@ class PartialExpression(PartialASTElement):
 class ParserState(BaseClass):
     def __init__(self):
         self.next = None
-        self.state = None
+        self.state : ParsingState = None
         self.line_number = 0
         self.ops : List[PartialExpression] = []
         self.args : List[PartialASTElement] = []
@@ -131,6 +135,9 @@ class ParserState(BaseClass):
     def set_state(self, state : ParsingState):
         typecheck(state, ParsingState)
         self.state = state
+
+    def clear_state(self):
+        self.state = None
 
     def push_op(self, cmd : PartialExpression):
         typecheck(cmd, PartialExpression)
@@ -192,7 +199,7 @@ class ParserState(BaseClass):
         return "STATE: " + str(self.next)
 
 # So it's sorta weird, but these lookahead functions "manage" the control flow of the parser
-def lookahead_binop(word : str, result : PartialCommand, state : ParserState):
+def lookahead_binop(word : str, result : PartialStatement, state : ParserState):
     if word == ";":
         state.update(expect_semi)
     elif word == ")":
@@ -200,7 +207,7 @@ def lookahead_binop(word : str, result : PartialCommand, state : ParserState):
     else:
         state.update(expect_binop)
 
-def lookahead_expr(word : str, result : PartialCommand, state : ParserState):
+def lookahead_expr(word : str, result : PartialStatement, state : ParserState):
     if word in ("-", "not"):
         state.update(expect_unop)
     elif word == "(":
@@ -208,42 +215,42 @@ def lookahead_expr(word : str, result : PartialCommand, state : ParserState):
     else:
         state.update(expect_const)
 
-def expect_semi(word : str, result : PartialCommand, state : ParserState) -> PartialASTElement:
+def expect_semi(word : str, result : PartialStatement, state : ParserState) -> PartialASTElement:
     if not word == ";":
         raise InternalException("Expected ; got " + str(word))
-    state.update(expect_command)
+    state.update(expect_Statement)
     state.clean_ops(result, False)
-    return PartialCommand(ast.Seq, [result.pack()])
+    return PartialStatement(ast.Seq, [result.pack()])
 
-def expect_close_paren(word :str, result : PartialCommand, state : ParserState) -> PartialExpression:
+def expect_close_paren(word :str, result : PartialStatement, state : ParserState) -> PartialExpression:
     if not word == ")":
         raise InternalException("Expected ) got " + str(word))
     state.update(Lookahead(lookahead_binop))
     state.clean_ops(result, True)
     return result
 
-def expect_binop(word : str, result : PartialCommand, state : ParserState) -> PartialExpression:
+def expect_binop(word : str, result : PartialStatement, state : ParserState) -> PartialExpression:
     if word in ("+", "-", "*", "^", "==", "<", ">", "<=", ">=", "and", "or"):
         state.update(Lookahead(lookahead_expr))
         state.push_op(PartialExpression(ast.Binop, [ast.Op(word)]))
         return result
     raise ParsingExpectException("binary operation", word, state)
 
-def expect_unop(word : str, result : PartialCommand, state : ParserState) -> PartialExpression:
+def expect_unop(word : str, result : PartialStatement, state : ParserState) -> PartialExpression:
     if not (word == "-" or word == "not"):
         raise InternalException("Expected Unop got " + str(word))
     state.update(Lookahead(lookahead_expr))
     state.push_op(PartialExpression(ast.Unop, [(ast.Op(word))])) # we can do this cause we already did the lookahead
     return result
 
-def expect_open_paren(word :str, result : PartialCommand, state : ParserState) -> PartialExpression:
+def expect_open_paren(word :str, result : PartialStatement, state : ParserState) -> PartialExpression:
     if not word == "(":
         raise InternalException("Expected ( got " + str(word))
     state.update(Lookahead(lookahead_expr))
     state.push_op(PartialExpression(OpenParen, []))
     return result
 
-def expect_const(word : str, result : PartialCommand, state : ParserState) -> PartialASTElement:
+def expect_const(word : str, result : PartialStatement, state : ParserState) -> PartialASTElement:
     state.update(Lookahead(lookahead_binop))
     if word.isdigit():
         state.push_arg(ast.Const(ast.Number(int(word))))
@@ -259,13 +266,13 @@ def expect_const(word : str, result : PartialCommand, state : ParserState) -> Pa
         raise ParsingExpectException("constant, unary operation, or variable", word, state)
     return result
 
-def expect_assign(word : str, result : PartialCommand, state : ParserState) -> PartialASTElement:
+def expect_assign(word : str, result : PartialStatement, state : ParserState) -> PartialASTElement:
     if word != "=":
         raise ParsingExpectException("=", word, state)
     state.update(Lookahead(lookahead_expr))
     return result # No append, just looking stuff up
 
-def expect_var(word : str, result : PartialCommand, state : ParserState) -> PartialASTElement:
+def expect_var(word : str, result : PartialStatement, state : ParserState) -> PartialASTElement:
     if word in reserved:
         raise ParsingException("use of reserved keyword as variable " + word, state)
     if not word.isidentifier():
@@ -274,37 +281,41 @@ def expect_var(word : str, result : PartialCommand, state : ParserState) -> Part
     result.append(ast.Var(word))
     return result
 
-def expect_command(word : str, result : Optional[PartialCommand], state : ParserState) -> PartialCommand:
+def expect_Statement(word : str, result : Optional[PartialStatement], state : ParserState) -> PartialStatement:
     if word == "skip":
         state.update(expect_semi)
-        cmd = PartialCommand(ast.Skip, [state.line_number])
+        cmd = PartialStatement(ast.Skip, [state.line_number])
     elif word == "print":
         state.update(Lookahead(lookahead_expr))
-        cmd = PartialCommand(ast.Print, [state.line_number])
+        cmd = PartialStatement(ast.Print, [state.line_number])
     elif word == "input":
         state.update(expect_var)
-        cmd = PartialCommand(ast.Input, [state.line_number])
+        cmd = PartialStatement(ast.Input, [state.line_number])
+    elif word == "if":
+        state.update(Lookahead(lookahead_expr))
+        state.set_state()
+        cmd = PartialStatement(ast.If, [state.line_number])
     elif word in reserved:
         raise ParsingException("attempting to assign to reserved keyword " + str(word), state)
     elif word.isidentifier():
         state.update(expect_assign)
-        cmd = PartialCommand(ast.Assign, [state.line_number, ast.Var(word)])
+        cmd = PartialStatement(ast.Assign, [state.line_number, ast.Var(word)])
     else:
-        raise ParsingExpectException("a command" + word, state)
+        raise ParsingExpectException("a Statement", word, state)
     if result is None:
         return cmd
     result.append(cmd)
     return result
     
 def parse_line(line : List[str], 
-  result : Optional[PartialCommand], 
-  state : ParserState) -> Optional[PartialCommand]:
+  result : Optional[PartialStatement], 
+  state : ParserState) -> Optional[PartialStatement]:
     while line:
         if line[0].startswith("//"): #Comments 
             return result
         word = line[0]
         if result is None:
-            result = expect_command(word, None, state)
+            result = expect_Statement(word, None, state)
             line.pop(0)
         elif isinstance(state.next, Lookahead):
             state.next.lookahead(word, result, state)
@@ -314,8 +325,8 @@ def parse_line(line : List[str],
     return result
 
 def parse(line : str, 
-  result : Optional[PartialCommand], 
-  state : ParserState) -> Optional[PartialCommand]:
+  result : Optional[PartialStatement], 
+  state : ParserState) -> Optional[PartialStatement]:
     line = line.strip() # who needs whitespace anyway
     # "Lex" the line -- yes, this is janky, yes I'm too lazy to fix it
     tokens = ";=+-*^()<>"
@@ -340,5 +351,5 @@ def parse_file(filename : str) -> ast.Program:
     try:
         result = result.pack()
     except:
-        raise ParsingException("incomplete final command " + str(result.cmd.__name__), state)
+        raise ParsingException("incomplete final Statement " + str(result.cmd.__name__), state)
     return ast.Program(result)
