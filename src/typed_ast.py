@@ -25,10 +25,10 @@ class UnitType(BaseType):
 T = TypeVar('T')
 
 class Typed(Generic[T]):
-    def __init__(self, element : T, t : BaseType):
-        util.typecheck(t, BaseType)
+    def __init__(self, element : T, typ : BaseType):
+        util.typecheck(typ, BaseType)
 
         self.element = element
-        self.t = t
+        self.typ = typ
     def __repr__(self):
-        return str(self.t) + " : " + str(self.element)
+        return str(self.typ) + " : " + str(self.element)

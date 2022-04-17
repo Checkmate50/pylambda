@@ -1,6 +1,6 @@
 from sys import argv
 from src.parser import parse_file
-from src.typechecker import typecheck
+from src.typechecker import typecheck_program
 
 def help():
     print("Expected args: python pylambda.py name_of_file.pylambda [-v]")
@@ -10,7 +10,7 @@ def main():
         help()
         exit()
     program = parse_file(argv[1])
-    typed = typecheck(program)
+    typed = typecheck_program(program)
     print(typed)
 
 if __name__=="__main__":

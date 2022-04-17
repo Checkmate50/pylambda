@@ -48,6 +48,15 @@ class Var(Expr):
     def __repr__(self):
         return "Var " + str(self.v)
 
+class Unop(Expr):
+    def __init__(self, op : Op, exp : Union[Expr, Typed]):
+        util.typecheck(op, Op)
+        util.typecheck_any(exp, [Expr, Typed])
+        self.op = op
+        self.exp = exp
+    def __repr__(self):
+        return "Unop " + str(self.op) + "(" + str(self.exp) + ")"
+
 class Binop(Expr):
     def __init__(self, op : Op, left : Union[Expr, Typed], right : Union[Expr, Typed]):
         # Note that op comes first cause of precedence stack crap
@@ -59,15 +68,6 @@ class Binop(Expr):
         self.right = right
     def __repr__(self):
         return "Binop " + str(self.op) + "(" + str(self.left) + ", " + str(self.right) + ")"
-
-class Unop(Expr):
-    def __init__(self, op : Op, exp : Union[Expr, Typed]):
-        util.typecheck(op, Op)
-        util.typecheck_any(exp, [Expr, Typed])
-        self.op = op
-        self.exp = exp
-    def __repr__(self):
-        return "Unop " + str(self.op) + "(" + str(self.exp) + ")"
 
 class Skip(Statement):
     def __init__(self, ln : int):

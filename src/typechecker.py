@@ -1,7 +1,7 @@
 from src.util import *
 import src.ast as ast
 from src.typed_ast import *
-from typing import Dict, TypeVar, Optional, Union
+from typing import Dict, Tuple, Union
 
 class TypeException(Exception):
     def __init__(self, message : str, context):
@@ -28,9 +28,129 @@ class TypeContext(BaseClass):
         typecheck(t, BaseType)
         self.vars[x] = t
 
-def check_statement(statement : ast.Statement, context : TypeContext) -> Typed[ast.Statement]:
-    if isinstance(statement, ast.Skip):
-        return Typed(statement, BoolType())
+    def copy(self):
+        result = TypeContext()
+        result.vars = self.vars.copy()
+        return result
 
-def typecheck(program : ast.Program) -> Typed[ast.Program]:
+def check_const(c : ast.Const, context : TypeContext) -> Typed[ast.Const]:
+    if isinstance(c.v, ast.Bool):
+        return Typed(c, BoolType())
+    if isinstance(c.v, ast.Number):
+        return Typed(c, IntType())
+    raise InternalException("Unknown matched const " + str(c))
+
+def check_var(var : Union[ast.Var, Typed], context : TypeContext) -> Typed[str]:
+    if isinstance(var, Typed):
+        raise InternalException("Unexpected Typed var " + str(var))
+    if isinstance(var.v, Typed):
+        raise InternalException("Unexpected Typed v in" + str(var))
+    return Typed(var.v, context.get_var(var.v))
+
+def match_unop(to_check : Tuple[str, BaseType], expect : Tuple[str, BaseType]) -> bool:
+    if to_check[0] != expect[0]:
+        return False
+    if not isinstance(to_check[1], expect[1]):
+        raise TypeExpectException(expect[1], to_check[1])
+    return True
+
+def match_binop(to_check : Tuple[str, BaseType, BaseType], expect : Tuple[List[str], BaseType, BaseType]) -> bool:
+    if to_check[0] not in expect[0]:
+        return False
+    if not isinstance(to_check[1], expect[1]):
+        raise TypeExpectException(expect[1], to_check[1])
+    if not isinstance(to_check[2], expect[2]):
+        raise TypeExpectException(expect[2], to_check[2])
+    return True
+
+def check_unop(u : ast.Unop, context : TypeContext) -> Typed[ast.Unop]:
+    u.exp = check_expr(u.exp, context)
+    check = (u.op.op, u.exp.typ)
+    if match_unop(check, ("-", IntType)):
+        return Typed(u, IntType())
+    if match_unop(check, ("not", BoolType)):
+        return Typed(u, BoolType())
+    raise InternalException("Unknown unary operation " + str(u.op.op))
+
+def check_binop(b : ast.Binop, context : TypeContext) -> Typed[ast.Binop]:
+    b.left = check_expr(b.left, context)
+    b.right = check_expr(b.right, context)
+    check = (b.op.op, b.left.typ, b.right.typ)
+    if match_binop(check, (["+", "-", "*", "^"], IntType, IntType)):
+        return Typed(b, IntType())
+    if match_binop(check, (["==", "<", ">", "<=", ">="], IntType, IntType)):
+        return Typed(b, BoolType())
+    if match_binop(check, (["and", "or"], BoolType, BoolType)):
+        return Typed(b, BoolType())
+    raise InternalException("Unknown binary operation " + str(b.op.op))
+
+def check_expr(exp : Union[ast.Expr, Typed], context : TypeContext) -> Typed[ast.Expr]:
+    if isinstance(exp, ast.Const):
+        return check_const(exp, context)
+    if isinstance(exp, ast.Var):
+        v = check_var(exp, context)
+        return Typed(exp, v.typ)
+    if isinstance(exp, ast.Unop):
+        return check_unop(exp, context)
+    if isinstance(exp, ast.Binop):
+        return check_binop(exp, context)
+
+def check_assign(statement : ast.Assign, context : TypeContext) -> Typed[ast.Assign]:
+    if isinstance(statement.var, Typed) or isinstance(statement.var.v, Typed):
+        raise InternalException("Unexpected typed var in " + str(statement))
+    statement.exp = check_expr(statement.exp, context)
+    context.add_var(statement.var.v, statement.exp.typ)
+    statement.var.v = Typed(statement.var.v, statement.exp.typ)
+    statement.var = Typed(statement.var, statement.exp.typ)
+    return Typed(statement, UnitType())
+
+def check_seq(statement : ast.Seq, context : TypeContext) -> Typed[ast.Seq]:
+    statement.s1 = check_statement(statement.s1, context)
+    statement.s2 = check_statement(statement.s2, context)
+    return Typed(statement, UnitType())
+
+def check_if(statement : Union[ast.If, ast.Elif, ast.While], context : TypeContext) -> Typed[Union[ast.If, ast.Elif, ast.While]]:
+    # We can union this whole mess cause of similar names and duck typing...
+    statement.b = check_expr(statement.b, context) # this is terrible stuff
+    statement.s = check_statement(statement.s, context.copy()) # Scope!
+    return Typed(statement, UnitType())
+
+def check_else(statement : ast.Else, context : TypeContext) -> Typed[ast.Else]:
+    statement.s = check_statement(statement.s, context.copy()) # Scope!
+    return Typed(statement, UnitType())
+
+def check_print(statement : ast.Print, context : TypeContext) -> Typed[ast.Print]:
+    statement.exp = check_expr(statement.exp, context)
+    return Typed(statement, UnitType())
+
+def check_input(statement : ast.Input, context : TypeContext) -> Typed[ast.Input]:
+    if isinstance(statement.var, Typed) or isinstance(statement.var.v, Typed):
+        raise InternalException("Unexpected typed var in " + str(statement))
+    context.add_var(statement.var.v, IntType())
+    statement.var.v = Typed(statement.var.v, IntType())
+    statement.var = Typed(statement.var, IntType())
+    return Typed(statement, UnitType())
+
+def check_statement(statement : Union[ast.Statement, Typed], context : TypeContext) -> Typed[ast.Statement]:
+    if isinstance(statement, ast.Skip):
+        return Typed(statement, UnitType())
+    if isinstance(statement, ast.Assign):
+        return check_assign(statement, context)
+    if isinstance(statement, ast.Seq):
+        return check_seq(statement, context)
+    if isinstance(statement, ast.If):
+        return check_if(statement, context)
+    if isinstance(statement, ast.Elif):
+        return check_if(statement, context)
+    if isinstance(statement, ast.Else):
+        return check_else(statement, context)
+    if isinstance(statement, ast.While):
+        return check_if(statement, context)
+    if isinstance(statement, ast.Print):
+        return check_print(statement, context)
+    if isinstance(statement, ast.Input):
+        return check_input(statement, context)
+    raise InternalException("Unknown matched statement " + str(statement))
+
+def typecheck_program(program : ast.Program) -> Typed[ast.Program]:
     return Typed(ast.Program(check_statement(program.s, TypeContext())), UnitType())

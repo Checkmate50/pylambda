@@ -4,9 +4,10 @@ class InternalException(Exception):
     def __init__(self, error : str):
         super().__init__("Internal error: " + str(error))
 
-def typecheck(value : any, t : type):
+def typecheck(value : any, t : type) -> type:
     if not isinstance(value, t):
         raise InternalException("expected " + str(t.__name__) + " got " + str(value))
+    return value
     
 def typecheck_any(value : any, typs : List[type]):
     for t in typs:
