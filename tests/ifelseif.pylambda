@@ -1,6 +1,6 @@
-if false {
+if false and true {
     print false;
-} elif true {
+} elif true or not true {
     print true;
 } else {
     print false;

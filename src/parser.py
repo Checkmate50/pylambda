@@ -76,6 +76,17 @@ class PartialASTElement(BaseClass):
         elif self.index_update > -1:
             self.index += self.index_update
 
+    def clear_index(self):
+        if self.index == -1:
+            if self.cmd == ast.Else:
+                return # special casing the no-argument Else statement
+            raise InternalException("Attempting to clear non-indexed Element " + str(self))
+        self.index_check("clear_index")
+        if isinstance(self.args[self.index], PartialExpression):
+            self.index = -1
+        else:
+            self.args[self.index].clear_index()
+
     def update_index(self, amount : int):
         self.index_update = amount
 
@@ -120,7 +131,7 @@ class PartialASTElement(BaseClass):
 
 class PartialStatement(PartialASTElement):
     def __repr__(self):
-        return "PARTIAL_Statement " + str(self.cmd) + " " + str(self.args) + " " + str(self.index)
+        return "PARTIAL_STATEMENT " + str(self.cmd) + " " + str(self.args) + " " + str(self.index)
 
 class PartialExpression(PartialASTElement):
     def __repr__(self):
@@ -198,10 +209,12 @@ class ParserState(BaseClass):
 
     def scope_in(self, cmd : PartialASTElement):
         typecheck(cmd, PartialASTElement)
+        cmd.clear_index()
         cmd.update_index(3)
         self.scope.append(cmd)
     def scope_out(self) -> PartialASTElement:
-        return self.scope.pop()
+        result = self.scope.pop()
+        return result
 
     def __repr__(self):
         return "STATE: " + str(self.next)
@@ -272,15 +285,15 @@ def expect_open_paren(word :str, result : PartialStatement, state : ParserState)
 def expect_const(word : str, result : PartialStatement, state : ParserState) -> PartialASTElement:
     state.update(Lookahead(lookahead_binop))
     if word.isdigit():
-        state.push_arg(ast.Const(ast.Number(int(word))))
+        state.push_arg(PartialExpression(ast.Const, [ast.Number(int(word))]))
     elif word == "true":
-        state.push_arg(ast.Const(ast.Bool(True)))
+        state.push_arg(PartialExpression(ast.Const, [ast.Bool(True)]))
     elif word == "false":
-        state.push_arg(ast.Const(ast.Bool(False)))
+        state.push_arg(PartialExpression(ast.Const, [ast.Bool(False)]))
     elif word in reserved:
         raise ParsingException("use of reserved keyword as variable " + word, state)
     elif word.isidentifier():
-        state.push_arg(ast.Var(word))
+        state.push_arg(PartialExpression(ast.Var, [word]))
     else:
         raise ParsingExpectException("constant, unary operation, or variable", word, state)
     return result
@@ -321,6 +334,10 @@ def expect_statement(word : str, result : Optional[PartialStatement], state : Pa
     elif word == "else":
         state.update(expect_open_block)
         cmd = PartialStatement(ast.Else, [state.line_number])
+    elif word == "while":
+        state.update(Lookahead(lookahead_expr))
+        state.set_state(ConditionState())
+        cmd = PartialStatement(ast.While, [state.line_number])
     elif word == "}":
         outer = state.scope_out()
         outer.append(result)
@@ -345,7 +362,6 @@ def parse_line(line : List[str],
         if line[0].startswith("//"): #Comments 
             return result
         word = line[0]
-        #print(result)
         if result is None:
             result = expect_statement(word, None, state)
             line.pop(0)

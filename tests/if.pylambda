@@ -1,4 +1,4 @@
-if true {
+if true or false {
     print 1;
     if false {
         print 2;
