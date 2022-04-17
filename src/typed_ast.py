@@ -8,19 +8,19 @@ class BoolType(BaseType):
     def __init__(self):
         pass
     def __repr__(self):
-        return "tBool"
+        return "type bool"
 
 class IntType(BaseType):
     def __init__(self):
         pass
     def __repr__(self):
-        return "tInt"
+        return "type int"
 
 class UnitType(BaseType):
     def __init__(self):
         pass
     def __repr__(self):
-        return "tUnit"
+        return "type unit"
 
 T = TypeVar('T')
 

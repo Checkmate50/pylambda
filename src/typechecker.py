@@ -65,6 +65,16 @@ def match_binop(to_check : Tuple[str, BaseType, BaseType], expect : Tuple[List[s
         raise TypeExpectException(expect[2](), to_check[2], context)
     return True
 
+def match_binop_any(to_check : Tuple[str, BaseType, BaseType], expect : Tuple[List[str], List[BaseType], List[BaseType]], context) -> bool:
+    if to_check[0] not in expect[0]:
+        return False
+    if len(expect[1]) != len(expect[2]):
+        raise InternalException("Invalid pair of expect lists " + str(expect[1]) + " and " + str(expect[2]))
+    for t1, t2 in zip(expect[1], expect[2]):
+        if isinstance(to_check[1], t1) and isinstance(to_check[2], t2):
+            return True
+    raise TypeExpectException([(x[0](), x[1]()) for x in zip(expect[1], expect[2])], (to_check[1], to_check[2]), context)
+
 def check_unop(u : ast.Unop, context : TypeContext) -> Typed[ast.Unop]:
     u.exp = check_expr(u.exp, context)
     check = (u.op.op, u.exp.typ)
@@ -80,7 +90,9 @@ def check_binop(b : ast.Binop, context : TypeContext) -> Typed[ast.Binop]:
     check = (b.op.op, b.left.typ, b.right.typ)
     if match_binop(check, (["+", "-", "*", "^"], IntType, IntType), context):
         return Typed(b, IntType())
-    if match_binop(check, (["==", "<", ">", "<=", ">="], IntType, IntType), context):
+    if match_binop(check, (["<", ">", "<=", ">="], IntType, IntType), context):
+        return Typed(b, BoolType())
+    if match_binop_any(check, (["=="], [BoolType, IntType], [BoolType, IntType]), context):
         return Typed(b, BoolType())
     if match_binop(check, (["and", "or"], BoolType, BoolType), context):
         return Typed(b, BoolType())
@@ -114,6 +126,8 @@ def check_seq(statement : ast.Seq, context : TypeContext) -> Typed[ast.Seq]:
 def check_if(statement : Union[ast.If, ast.Elif, ast.While], context : TypeContext) -> Typed[Union[ast.If, ast.Elif, ast.While]]:
     # We can union this whole mess cause of similar names and duck typing...
     statement.b = check_expr(statement.b, context) # this is terrible stuff
+    if not isinstance(statement.b.typ, BoolType):
+        raise TypeExpectException(BoolType(), statement.b.typ, context)
     statement.s = check_statement(statement.s, context.copy()) # Scope!
     return Typed(statement, UnitType())
 

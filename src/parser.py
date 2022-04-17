@@ -338,7 +338,10 @@ def expect_statement(word : str, result : Optional[PartialStatement], state : Pa
         cmd = PartialStatement(ast.While, [state.line_number])
     elif word == "}":
         outer = state.scope_out()
-        outer.append(result)
+        if result == None:
+            outer.append(PartialStatement(ast.Skip, [state.line_number]))
+        else:
+            outer.append(result)
         cmd = PartialStatement(ast.Seq, [state.line_number, outer.pack(state)])
         return cmd
     elif word in reserved:
@@ -375,7 +378,7 @@ def parse(line : str,
   state : ParserState) -> Optional[PartialStatement]:
     line = line.strip() # who needs whitespace anyway
     # "Lex" the line -- yes, this is janky, yes I'm too lazy to fix it
-    tokens = ";=+-*^()<>"
+    tokens = ";=+-*^()<>\{\}"
     for token in tokens:
         line = line.replace(token, f" {token} ")
     # Special 2-character symbols

@@ -1,0 +1,7 @@
+input x;
+if true {
+    if x {
+        print 0;
+    }
+}
+print 1;
