@@ -1,4 +1,5 @@
 import src.util as util
+from typing import Optional
 
 # Yes, I will manually typecheck all of these cause they're _so_ important to get right
 
@@ -76,63 +77,81 @@ class Skip(Command):
 
 class Assign(Command):
     def __init__(self, ln : int, var : Var, exp : Expr):
+        util.typecheck(ln, int)
         util.typecheck(var, Var)
         util.typecheck(exp, Expr)
-        util.typecheck(ln, int)
+        
+        self.ln = ln
         self.var = var
         self.exp = exp
-        self.ln = ln
     def __repr__(self):
         return "Assign\n" + str(self.var) + "\n=\n" + str(self.exp)
 
 class Seq(Command):
     def __init__(self, ln : int, c1 : Command, c2 : Command = Skip()):
+        util.typecheck(ln, int)
         util.typecheck(c1, Command)
         util.typecheck(c2, Command)
-        util.typecheck(ln, int)
+
+        self.ln = ln
         self.c1 = c1
         self.c2 = c2
-        self.ln = ln
     def __repr__(self):
         return str(self.c1) + "\n;\n" + str(self.c2)
 
-class IfElse(Command):
-    def __init__(self, ln : int, b : Expr, c : Command):
+class If(Command):
+    def __init__(self, ln : int, b : Expr, c : Command, e : Command = Skip()):
+        util.typecheck(ln, int)
         util.typecheck(b, Expr)
         util.typecheck(c, Command)
-        util.typecheck(ln, int)
+        util.typecheck(e, Command)
+        
+        self.ln = ln
         self.b = b
         self.c = c
+        self.e = e
+    def __repr__(self):
+        return "If\n" + str(self.b) + "\n{\n" + str(self.c) + "\n}\n"
+
+class Else(Command):
+    def __init__(self, ln : int, c : Command):
+        util.typecheck(ln, int)
+        util.typecheck(c, Command)
+        
         self.ln = ln
+        self.c = c
     def __repr__(self):
         return "If\n" + str(self.b) + "\n{\n" + str(self.c) + "\n}\n"
 
 class While(Command):
     def __init__(self, ln : int, b : Expr, c : Command):
+        util.typecheck(ln, int)
         util.typecheck(b, Expr)
         util.typecheck(c, Command)
-        util.typecheck(ln, int)
+
+        self.ln = ln
         self.b = b
         self.c = c
-        self.ln = ln
     def __repr__(self):
         return "While\n" + str(self.b) + "\n{\n" + str(self.c) + "\n}\n"
 
 class Print(Command):
     def __init__(self, ln : int, exp : Expr):
-        util.typecheck(exp, Expr)
         util.typecheck(ln, int)
-        self.exp = exp
+        util.typecheck(exp, Expr)
+        
         self.ln = ln
+        self.exp = exp
     def __repr__(self):
         return "Print\n" + str(self.exp)
 
 class Input(Command):
     def __init__(self, ln : int, var : Var):
-        util.typecheck(var, Var)
         util.typecheck(ln, int)
-        self.var = var
+        util.typecheck(var, Var)
+        
         self.ln = ln
+        self.var = var
     def __repr__(self):
         return "Input\n" + str(self.var)
 
