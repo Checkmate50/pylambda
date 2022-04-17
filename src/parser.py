@@ -247,7 +247,7 @@ def expect_semi(word : str, result : PartialStatement, state : ParserState) -> P
 
 def expect_open_block(word :str, result : PartialStatement, state : ParserState) -> PartialExpression:
     if not word == "{":
-        raise InternalException("Expected { got " + str(word))
+        raise ParsingExpectException("Expected { got ", word, state)
     state.update(expect_statement)
     state.clean_ops(result, False)
     state.clear_state()
@@ -395,7 +395,7 @@ def parse_file(filename : str) -> ast.Program:
             result = parse(line, result, state)
             state.line_number += 1
     if len(state.scope) > 0:
-        raise ParsingException("unclosed scope (did you forget a '}'?)")
+        raise ParsingException("unclosed scope (did you forget a '}'?)", state)
     if result is None:
         return ast.Program(ast.Skip)  # default program
     try:

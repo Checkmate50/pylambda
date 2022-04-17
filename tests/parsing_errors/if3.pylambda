@@ -1,0 +1,4 @@
+if true {
+    if false {
+        print 5;
+    }

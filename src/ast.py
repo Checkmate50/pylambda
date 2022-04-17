@@ -165,7 +165,7 @@ class Input(Statement):
     def __repr__(self):
         return "Input\n" + str(self.var)
 
-class Program:
+class Program(util.BaseClass):
     def __init__(self, c : Statement):
         util.typecheck(c, Statement)
         self.c = c
