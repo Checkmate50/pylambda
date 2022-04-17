@@ -1,5 +1,6 @@
 import src.util as util
-from typing import Optional
+from typing import Union
+from src.typed_ast import Typed
 
 # Yes, I will manually typecheck all of these cause they're _so_ important to get right
 
@@ -27,8 +28,8 @@ class Bool(Value):
         return "Bool " + str(self.v)
 
 class Const(Expr):
-    def __init__(self, v : Value):
-        util.typecheck(v, Value)
+    def __init__(self, v : Union[Value, Typed]):
+        util.typecheck_any(v, [Value, Typed])
         self.v = v
     def __repr__(self):
         return "Const " + str(self.v)
@@ -41,18 +42,18 @@ class Op(util.BaseClass):
         return "Op " + str(self.op)
 
 class Var(Expr):
-    def __init__(self, v : str):
-        util.typecheck(v, str)
+    def __init__(self, v : Union[str, Typed]):
+        util.typecheck_any(v, [str, Typed])
         self.v = v
     def __repr__(self):
         return "Var " + str(self.v)
 
 class Binop(Expr):
-    def __init__(self, op : Op, left : Expr, right : Expr):
+    def __init__(self, op : Op, left : Union[Expr, Typed], right : Union[Expr, Typed]):
         # Note that op comes first cause of precedence stack crap
         util.typecheck(op, Op)
-        util.typecheck(left, Expr)
-        util.typecheck(right, Expr)
+        util.typecheck_any(left, [Expr, Typed])
+        util.typecheck_any(right, [Expr, Typed])
         self.op = op
         self.left = left
         self.right = right
@@ -60,9 +61,9 @@ class Binop(Expr):
         return "Binop " + str(self.op) + "(" + str(self.left) + ", " + str(self.right) + ")"
 
 class Unop(Expr):
-    def __init__(self, op : Op, exp : Expr):
+    def __init__(self, op : Op, exp : Union[Expr, Typed]):
         util.typecheck(op, Op)
-        util.typecheck(exp, Expr)
+        util.typecheck_any(exp, [Expr, Typed])
         self.op = op
         self.exp = exp
     def __repr__(self):
@@ -76,10 +77,10 @@ class Skip(Statement):
         return "Skip\n"
 
 class Assign(Statement):
-    def __init__(self, ln : int, var : Var, exp : Expr):
+    def __init__(self, ln : int, var : Union[Var, Typed], exp : Union[Expr, Typed]):
         util.typecheck(ln, int)
-        util.typecheck(var, Var)
-        util.typecheck(exp, Expr)
+        util.typecheck_any(var, [Var, Typed])
+        util.typecheck_any(exp, [Expr, Typed])
         
         self.ln = ln
         self.var = var
@@ -88,67 +89,67 @@ class Assign(Statement):
         return "Assign\n" + str(self.var) + "\n=\n" + str(self.exp)
 
 class Seq(Statement):
-    def __init__(self, ln : int, c1 : Statement, c2 : Statement = Skip(-1)):
+    def __init__(self, ln : int, s1 : Union[Statement, Typed], s2 : Union[Statement, Typed] = Skip(-1)):
         util.typecheck(ln, int)
-        util.typecheck(c1, Statement)
-        util.typecheck(c2, Statement)
+        util.typecheck_any(s1, [Statement, Typed])
+        util.typecheck_any(s2, [Statement, Typed])
 
         self.ln = ln
-        self.c1 = c1
-        self.c2 = c2
+        self.s1 = s1
+        self.s2 = s2
     def __repr__(self):
-        return str(self.c1) + "\n;\n" + str(self.c2)
+        return str(self.s1) + "\n;\n" + str(self.s2)
 
 class If(Statement):
-    def __init__(self, ln : int, b : Expr, c : Statement):
+    def __init__(self, ln : int, b : Union[Expr, Typed], s : Union[Statement, Typed]):
         util.typecheck(ln, int)
-        util.typecheck(b, Expr)
-        util.typecheck(c, Statement)
+        util.typecheck_any(b, [Expr, Typed])
+        util.typecheck_any(s, [Statement, Typed])
         
         self.ln = ln
         self.b = b
-        self.c = c
+        self.s = s
     def __repr__(self):
-        return "If\n" + str(self.b) + "\n{\n" + str(self.c) + "}"
+        return "If\n" + str(self.b) + "\n{\n" + str(self.s) + "}"
 
 class Elif(Statement):
-    def __init__(self, ln : int, b : Expr, c : Statement):
+    def __init__(self, ln : int, b : Union[Expr, Typed], s : Union[Statement, Typed]):
         util.typecheck(ln, int)
-        util.typecheck(b, Expr)
-        util.typecheck(c, Statement)
+        util.typecheck_any(b, [Expr, Typed])
+        util.typecheck_any(s, [Statement, Typed])
         
         self.ln = ln
         self.b = b
-        self.c = c
+        self.s = s
     def __repr__(self):
-        return "Elif\n" + str(self.b) + "\n{\n" + str(self.c) + "}"
+        return "Elif\n" + str(self.b) + "\n{\n" + str(self.s) + "}"
 
 class Else(Statement):
-    def __init__(self, ln : int, c : Statement):
+    def __init__(self, ln : int, s : Union[Statement, Typed]):
         util.typecheck(ln, int)
-        util.typecheck(c, Statement)
+        util.typecheck_any(s, [Statement, Typed])
         
         self.ln = ln
-        self.c = c
+        self.s = s
     def __repr__(self):
-        return "Else" + "\n{\n" + str(self.c) + "}"
+        return "Else" + "\n{\n" + str(self.s) + "}"
 
 class While(Statement):
-    def __init__(self, ln : int, b : Expr, c : Statement):
+    def __init__(self, ln : int, b : Union[Expr, Typed], s : Union[Statement, Typed]):
         util.typecheck(ln, int)
-        util.typecheck(b, Expr)
-        util.typecheck(c, Statement)
+        util.typecheck_any(b, [Expr, Typed])
+        util.typecheck_any(s, [Statement, Typed])
 
         self.ln = ln
         self.b = b
-        self.c = c
+        self.s = s
     def __repr__(self):
-        return "While\n" + str(self.b) + "\n{\n" + str(self.c) + "}"
+        return "While\n" + str(self.b) + "\n{\n" + str(self.s) + "}"
 
 class Print(Statement):
-    def __init__(self, ln : int, exp : Expr):
+    def __init__(self, ln : int, exp : Union[Expr, Typed]):
         util.typecheck(ln, int)
-        util.typecheck(exp, Expr)
+        util.typecheck_any(exp, [Expr, Typed])
         
         self.ln = ln
         self.exp = exp
@@ -156,9 +157,9 @@ class Print(Statement):
         return "Print\n" + str(self.exp)
 
 class Input(Statement):
-    def __init__(self, ln : int, var : Var):
+    def __init__(self, ln : int, var : Union[Var, Typed]):
         util.typecheck(ln, int)
-        util.typecheck(var, Var)
+        util.typecheck_any(var, [Var, Typed])
         
         self.ln = ln
         self.var = var
@@ -166,8 +167,8 @@ class Input(Statement):
         return "Input\n" + str(self.var)
 
 class Program(util.BaseClass):
-    def __init__(self, c : Statement):
-        util.typecheck(c, Statement)
-        self.c = c
+    def __init__(self, s : Union[Statement, Typed]):
+        util.typecheck_any(s, [Statement, Typed])
+        self.s = s
     def __repr__(self):
-        return "Program\n" + str(self.c)
+        return "Program\n" + str(self.s)

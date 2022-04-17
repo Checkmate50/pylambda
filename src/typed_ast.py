@@ -1,5 +1,4 @@
 import src.util as util
-import src.ast as ast
 from typing import Generic, TypeVar
 
 class BaseType(util.BaseClass):

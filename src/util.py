@@ -1,3 +1,5 @@
+from typing import List
+
 class InternalException(Exception):
     def __init__(self, error : str):
         super().__init__("Internal error: " + str(error))
@@ -5,6 +7,12 @@ class InternalException(Exception):
 def typecheck(value : any, t : type):
     if not isinstance(value, t):
         raise InternalException("expected " + str(t.__name__) + " got " + str(value))
+    
+def typecheck_any(value : any, typs : List[type]):
+    for t in typs:
+        if isinstance(value, t):
+            return
+    raise InternalException("expected one of " + [str(t.__name__) for t in typs] + " got " + str(value))
 
 class BaseClass:
     def __init__(self):
