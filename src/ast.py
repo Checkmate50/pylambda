@@ -88,7 +88,7 @@ class Assign(Statement):
         return "Assign\n" + str(self.var) + "\n=\n" + str(self.exp)
 
 class Seq(Statement):
-    def __init__(self, ln : int, c1 : Statement, c2 : Statement = Skip()):
+    def __init__(self, ln : int, c1 : Statement, c2 : Statement = Skip(-1)):
         util.typecheck(ln, int)
         util.typecheck(c1, Statement)
         util.typecheck(c2, Statement)
@@ -100,18 +100,28 @@ class Seq(Statement):
         return str(self.c1) + "\n;\n" + str(self.c2)
 
 class If(Statement):
-    def __init__(self, ln : int, b : Expr, c : Statement, e : Statement = Skip()):
+    def __init__(self, ln : int, b : Expr, c : Statement):
         util.typecheck(ln, int)
         util.typecheck(b, Expr)
         util.typecheck(c, Statement)
-        util.typecheck(e, Statement)
         
         self.ln = ln
         self.b = b
         self.c = c
-        self.e = e
     def __repr__(self):
-        return "If\n" + str(self.b) + "\n{\n" + str(self.c) + "\n}\n"
+        return "If\n" + str(self.b) + "\n{\n" + str(self.c) + "}"
+
+class Elif(Statement):
+    def __init__(self, ln : int, b : Expr, c : Statement):
+        util.typecheck(ln, int)
+        util.typecheck(b, Expr)
+        util.typecheck(c, Statement)
+        
+        self.ln = ln
+        self.b = b
+        self.c = c
+    def __repr__(self):
+        return "Elif\n" + str(self.b) + "\n{\n" + str(self.c) + "}"
 
 class Else(Statement):
     def __init__(self, ln : int, c : Statement):
@@ -121,7 +131,7 @@ class Else(Statement):
         self.ln = ln
         self.c = c
     def __repr__(self):
-        return "If\n" + str(self.b) + "\n{\n" + str(self.c) + "\n}\n"
+        return "Else" + "\n{\n" + str(self.c) + "}"
 
 class While(Statement):
     def __init__(self, ln : int, b : Expr, c : Statement):
@@ -133,7 +143,7 @@ class While(Statement):
         self.b = b
         self.c = c
     def __repr__(self):
-        return "While\n" + str(self.b) + "\n{\n" + str(self.c) + "\n}\n"
+        return "While\n" + str(self.b) + "\n{\n" + str(self.c) + "}"
 
 class Print(Statement):
     def __init__(self, ln : int, exp : Expr):

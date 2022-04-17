@@ -1,0 +1,8 @@
+if false {
+    print false;
+} elif true {
+    print true;
+} else {
+    print false;
+}
+print 0;

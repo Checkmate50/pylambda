@@ -35,9 +35,17 @@ class ParsingExpectException(ParsingException):
 class ParsingState(BaseClass):
     pass
 
-class IfState(ParsingState):
+class DefaultState(ParsingState):
     def __init__(self):
         pass
+    def __repr__(self):
+        return "DEFAULT STATE"
+
+class ConditionState(ParsingState):
+    def __init__(self):
+        pass
+    def __repr__(self):
+        return "DEFAULT STATE"
 
 class Lookahead(BaseClass):
     def __init__(self, lookahead):
@@ -51,6 +59,7 @@ class PartialASTElement(BaseClass):
     def __init__(self, cmd : ast.Statement, args : List[BaseClass]):
         self.cmd = cmd
         self.args = args
+        self.index_update = -1
         self.index = -1
 
     def index_check(self, fun : str):
@@ -59,11 +68,16 @@ class PartialASTElement(BaseClass):
                 str(self.args[self.index]) + " at index " + str(self.index))
 
     def set_index(self, arg : BaseClass):
-        # Ok, this is _super_ janky, but control flow for Statement appending is done here
+        # Ok, this is _super_ janky, but control flow for Statement appending is mostly done here
         if self.cmd == ast.Seq:
-            self.index = 1
-        if isinstance(arg, PartialExpression):
+            self.index = 2
+        elif isinstance(arg, PartialExpression):
             self.index = len(self.args)-1
+        elif self.index_update > -1:
+            self.index += self.index_update
+
+    def update_index(self, amount : int):
+        self.index_update = amount
 
     def append(self, arg : BaseClass):
         if self.index == -1:
@@ -93,20 +107,13 @@ class PartialASTElement(BaseClass):
         self.index_check("use latest")
         return self.args[self.index].latest()
 
-    def pack_next(self):
-        if self.index == -1:
-            raise InternalException("Attempting to pack internal of unindexed partial element " + str(self))
-        self.index_check("pack_next")
-        self.args[self.index].pack()
-        self.index += 1
-
-    def pack(self):
+    def pack(self, state):
         try:
-            packed = [arg.pack() if isinstance(arg, PartialASTElement) else arg for arg in self.args]
+            packed = [arg.pack(state) if isinstance(arg, PartialASTElement) else arg for arg in self.args]
             return self.cmd(*packed)
         except TypeError:
-            raise ParsingException("wrong number of arguments to " + 
-                str(self.cmd.__name__) + " (" + str(len(self.args)) + " given)")
+            raise ParsingException("wrong number of arguments to " +
+                str(self.cmd.__name__) + " (" + str(len(self.args)) + " given)", state)
 
     def is_partial(self):
         return isinstance(self.cmd, PartialASTElement)
@@ -122,7 +129,7 @@ class PartialExpression(PartialASTElement):
 class ParserState(BaseClass):
     def __init__(self):
         self.next = None
-        self.state : ParsingState = None
+        self.clear_state()
         self.line_number = 0
         self.ops : List[PartialExpression] = []
         self.args : List[PartialASTElement] = []
@@ -137,7 +144,7 @@ class ParserState(BaseClass):
         self.state = state
 
     def clear_state(self):
-        self.state = None
+        self.state = DefaultState()
 
     def push_op(self, cmd : PartialExpression):
         typecheck(cmd, PartialExpression)
@@ -191,6 +198,7 @@ class ParserState(BaseClass):
 
     def scope_in(self, cmd : PartialASTElement):
         typecheck(cmd, PartialASTElement)
+        cmd.update_index(3)
         self.scope.append(cmd)
     def scope_out(self) -> PartialASTElement:
         return self.scope.pop()
@@ -200,8 +208,10 @@ class ParserState(BaseClass):
 
 # So it's sorta weird, but these lookahead functions "manage" the control flow of the parser
 def lookahead_binop(word : str, result : PartialStatement, state : ParserState):
-    if word == ";":
+    if not isinstance(state.state, ConditionState) and word == ";":
         state.update(expect_semi)
+    elif isinstance(state.state, ConditionState) and word == "{":
+        state.update(expect_open_block)
     elif word == ")":
         state.update(expect_close_paren)
     else:
@@ -218,9 +228,18 @@ def lookahead_expr(word : str, result : PartialStatement, state : ParserState):
 def expect_semi(word : str, result : PartialStatement, state : ParserState) -> PartialASTElement:
     if not word == ";":
         raise InternalException("Expected ; got " + str(word))
-    state.update(expect_Statement)
+    state.update(expect_statement)
     state.clean_ops(result, False)
-    return PartialStatement(ast.Seq, [result.pack()])
+    return PartialStatement(ast.Seq, [state.line_number, result.pack(state)])
+
+def expect_open_block(word :str, result : PartialStatement, state : ParserState) -> PartialExpression:
+    if not word == "{":
+        raise InternalException("Expected { got " + str(word))
+    state.update(expect_statement)
+    state.clean_ops(result, False)
+    state.clear_state()
+    state.scope_in(result)
+    return None
 
 def expect_close_paren(word :str, result : PartialStatement, state : ParserState) -> PartialExpression:
     if not word == ")":
@@ -281,7 +300,7 @@ def expect_var(word : str, result : PartialStatement, state : ParserState) -> Pa
     result.append(ast.Var(word))
     return result
 
-def expect_Statement(word : str, result : Optional[PartialStatement], state : ParserState) -> PartialStatement:
+def expect_statement(word : str, result : Optional[PartialStatement], state : ParserState) -> PartialStatement:
     if word == "skip":
         state.update(expect_semi)
         cmd = PartialStatement(ast.Skip, [state.line_number])
@@ -293,8 +312,20 @@ def expect_Statement(word : str, result : Optional[PartialStatement], state : Pa
         cmd = PartialStatement(ast.Input, [state.line_number])
     elif word == "if":
         state.update(Lookahead(lookahead_expr))
-        state.set_state()
+        state.set_state(ConditionState())
         cmd = PartialStatement(ast.If, [state.line_number])
+    elif word == "elif":
+        state.update(Lookahead(lookahead_expr))
+        state.set_state(ConditionState())
+        cmd = PartialStatement(ast.Elif, [state.line_number])
+    elif word == "else":
+        state.update(expect_open_block)
+        cmd = PartialStatement(ast.Else, [state.line_number])
+    elif word == "}":
+        outer = state.scope_out()
+        outer.append(result)
+        cmd = PartialStatement(ast.Seq, [state.line_number, outer.pack(state)])
+        return cmd
     elif word in reserved:
         raise ParsingException("attempting to assign to reserved keyword " + str(word), state)
     elif word.isidentifier():
@@ -314,8 +345,9 @@ def parse_line(line : List[str],
         if line[0].startswith("//"): #Comments 
             return result
         word = line[0]
+        #print(result)
         if result is None:
-            result = expect_Statement(word, None, state)
+            result = expect_statement(word, None, state)
             line.pop(0)
         elif isinstance(state.next, Lookahead):
             state.next.lookahead(word, result, state)
@@ -346,10 +378,12 @@ def parse_file(filename : str) -> ast.Program:
         for line in f:
             result = parse(line, result, state)
             state.line_number += 1
+    if len(state.scope) > 0:
+        raise ParsingException("unclosed scope (did you forget a '}'?)")
     if result is None:
         return ast.Program(ast.Skip)  # default program
     try:
-        result = result.pack()
+        result = result.pack(state)
     except:
         raise ParsingException("incomplete final Statement " + str(result.cmd.__name__), state)
     return ast.Program(result)
