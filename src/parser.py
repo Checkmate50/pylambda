@@ -24,12 +24,10 @@ class OpenParen(ast.Expr):
 
 class ParsingException(Exception):
     def __init__(self, message : str, state):
-        # Call the base class constructor with the parameters it needs
         super().__init__("Parsing error on line " + str(state.line_number) + ": " + str(message))
 
 class ParsingExpectException(ParsingException):
     def __init__(self, expect : str, word : str, state):
-        # Call the base class constructor with the parameters it needs
         super().__init__("expected " + str(expect) + ", got " + str(word), state)
 
 class ParsingState(BaseClass):

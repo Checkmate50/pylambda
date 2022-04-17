@@ -1,15 +1,14 @@
 from src.util import *
 import src.ast as ast
 from src.typed_ast import *
-from typing import Dict, Tuple, Union
+from typing import Dict, Tuple, Union, Type
 
 class TypeException(Exception):
     def __init__(self, message : str, context):
         super().__init__("Type Error on line " + str(context.line_number) + ": " + str(message))
 
-class TypeExpectException(Exception):
+class TypeExpectException(TypeException):
     def __init__(self, expect : BaseType, word : BaseType, context):
-        # Call the base class constructor with the parameters it needs
         super().__init__("expected " + str(expect) + ", got " + str(word), context)
 
 class TypeContext(BaseClass):
@@ -33,6 +32,9 @@ class TypeContext(BaseClass):
         result.vars = self.vars.copy()
         return result
 
+    def __repr__(self):
+        return "TYPE_CONTEXT " + str(self.line_number) + "\n" + str(self.vars)
+
 def check_const(c : ast.Const, context : TypeContext) -> Typed[ast.Const]:
     if isinstance(c.v, ast.Bool):
         return Typed(c, BoolType())
@@ -47,28 +49,28 @@ def check_var(var : Union[ast.Var, Typed], context : TypeContext) -> Typed[str]:
         raise InternalException("Unexpected Typed v in" + str(var))
     return Typed(var.v, context.get_var(var.v))
 
-def match_unop(to_check : Tuple[str, BaseType], expect : Tuple[str, BaseType]) -> bool:
+def match_unop(to_check : Tuple[str, BaseType], expect : Tuple[str, Type[BaseType]], context) -> bool:
     if to_check[0] != expect[0]:
         return False
     if not isinstance(to_check[1], expect[1]):
-        raise TypeExpectException(expect[1], to_check[1])
+        raise TypeExpectException(expect[1](), to_check[1], context)
     return True
 
-def match_binop(to_check : Tuple[str, BaseType, BaseType], expect : Tuple[List[str], BaseType, BaseType]) -> bool:
+def match_binop(to_check : Tuple[str, BaseType, BaseType], expect : Tuple[List[str], Type[BaseType], Type[BaseType]], context) -> bool:
     if to_check[0] not in expect[0]:
         return False
     if not isinstance(to_check[1], expect[1]):
-        raise TypeExpectException(expect[1], to_check[1])
+        raise TypeExpectException(expect[1](), to_check[1], context)
     if not isinstance(to_check[2], expect[2]):
-        raise TypeExpectException(expect[2], to_check[2])
+        raise TypeExpectException(expect[2](), to_check[2], context)
     return True
 
 def check_unop(u : ast.Unop, context : TypeContext) -> Typed[ast.Unop]:
     u.exp = check_expr(u.exp, context)
     check = (u.op.op, u.exp.typ)
-    if match_unop(check, ("-", IntType)):
+    if match_unop(check, ("-", IntType), context):
         return Typed(u, IntType())
-    if match_unop(check, ("not", BoolType)):
+    if match_unop(check, ("not", BoolType), context):
         return Typed(u, BoolType())
     raise InternalException("Unknown unary operation " + str(u.op.op))
 
@@ -76,11 +78,11 @@ def check_binop(b : ast.Binop, context : TypeContext) -> Typed[ast.Binop]:
     b.left = check_expr(b.left, context)
     b.right = check_expr(b.right, context)
     check = (b.op.op, b.left.typ, b.right.typ)
-    if match_binop(check, (["+", "-", "*", "^"], IntType, IntType)):
+    if match_binop(check, (["+", "-", "*", "^"], IntType, IntType), context):
         return Typed(b, IntType())
-    if match_binop(check, (["==", "<", ">", "<=", ">="], IntType, IntType)):
+    if match_binop(check, (["==", "<", ">", "<=", ">="], IntType, IntType), context):
         return Typed(b, BoolType())
-    if match_binop(check, (["and", "or"], BoolType, BoolType)):
+    if match_binop(check, (["and", "or"], BoolType, BoolType), context):
         return Typed(b, BoolType())
     raise InternalException("Unknown binary operation " + str(b.op.op))
 
@@ -132,6 +134,9 @@ def check_input(statement : ast.Input, context : TypeContext) -> Typed[ast.Input
     return Typed(statement, UnitType())
 
 def check_statement(statement : Union[ast.Statement, Typed], context : TypeContext) -> Typed[ast.Statement]:
+    if isinstance(statement, Typed):
+        raise InternalException("Unexpected typed statement", Typed)
+    context.line_number = statement.ln # Typesafe cause ast.Statement is an abstract class
     if isinstance(statement, ast.Skip):
         return Typed(statement, UnitType())
     if isinstance(statement, ast.Assign):
