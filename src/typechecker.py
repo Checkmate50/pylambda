@@ -37,8 +37,10 @@ class TypeContext(BaseClass):
 
 def check_const(c : ast.Const, context : TypeContext) -> Typed[ast.Const]:
     if isinstance(c.v, ast.Bool):
+        c.v = Typed(c.v, BoolType())
         return Typed(c, BoolType())
     if isinstance(c.v, ast.Number):
+        c.v = Typed(c.v, IntType())
         return Typed(c, IntType())
     raise InternalException("Unknown matched const " + str(c))
 
