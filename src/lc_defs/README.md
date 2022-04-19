@@ -1,0 +1,1 @@
+To execute this monstrosity to update lc_constants, run `python src/lc_defs/lc_constants_macro.py` from the root directory

@@ -1,126 +1,14 @@
 import src.ast as ast
 from src.util import *
 from src.typed_ast import Typed, IntType, BoolType, UnitType, BaseType
-from typing import TypeVar, Union, Set, List
-import inspect
-from copy import copy
-
-class CLI:
-    def __init__(self, args : Set[str] = set()):
-        self.set_args(args)
-
-    def set_args(self, args : List[str]):
-        for i in range(len(args)):
-            if not args[i].startswith("--") or len(args[i]) < 2:
-                raise Exception("Invalid argument " + str(args[i]))
-            args[i] = args[i][2:]
-        self.args = set(args)
-
-    def contains(self, arg : str) -> bool:
-        return arg in self.args
-
-    def __repr__(self):
-        return "CLI: " + str(self.args)
-
-class EmitContext(BaseClass):
-    def __init__(self, cli : CLI):
-        self.cli = cli
-        self.interp : bool = False
-
-    def raw(self):
-        return self.cli.contains("raw")
-
-    def debug(self):
-        return self.cli.contains("debug")
-
-    def __repr__(self):
-        return "EMIT_CONTEXT" + str(self.cli)
+from typing import TypeVar, Union
+from src.lc_constants import *
 
 T = TypeVar('T')
 
 def check_typed(term : Union[BaseClass, Typed[T]]) -> Typed[T]:
     typecheck(term, Typed)
     return term
-
-def retrieve_name_constant(var : any) -> List[str]:
-    callers_local_vars = inspect.currentframe().f_globals.items()
-    return [var_name for var_name, var_val in callers_local_vars if var_val is var]
-
-# maybe_debug is too long to type
-def mr(val : str, context : EmitContext) -> str:
-    if context.debug():
-        return f"{retrieve_name_constant(val)[0].upper().split('_')[0]}"
-    return f"{val(context)}"
-
-def false(context : EmitContext) -> str:
-    return "(lambda x : lambda y : y)"
-
-def true(context : EmitContext) -> str:
-    return "(lambda x : lambda y : x)"
-
-def pair_def(context : EmitContext) -> str:
-    return "(lambda x : lambda y : lambda f : (f (x) (y)))"
-
-def first_def(context : EmitContext) -> str:
-    return f"(lambda x : (x ({true(context)})))"
-
-def second_def(context : EmitContext) -> str:
-    return f"(lambda x : (x ({false(context)})))"
-
-def pair(left : str, right : str, context : EmitContext) -> str:
-    return f"{mr(pair_def, context)} ({left}) ({right})"
-
-def first(p : str, context : EmitContext) -> str:
-    return f"{mr(first_def, context)} ({p})"
-
-def second(p : str, context : EmitContext) -> str:
-    return f"{mr(second_def, context)} ({p})"
-
-def czero(context : EmitContext) -> str:
-    return "(lambda f : lambda x : x)"
-
-# This is an _unusual_ representation
-def zero(context : EmitContext) -> str:
-    return f"({pair(mr(czero, context), mr(czero, context), context)})"
-
-def csucc(context : EmitContext):
-    return "(lambda n : lambda f : lambda x : (f (n (f) (x))))"
-
-def cplus(context : EmitContext) -> str:
-    return f"(lambda m : lambda n : (m ({mr(csucc, context)}) (n)))"
-
-def cmult(context : EmitContext) -> str:
-    return f"(lambda m : lambda n : lambda f : (m (n (f))))"
-
-def cexp(context : EmitContext) -> str:
-    return f"(lambda b : lambda e : e (b))"
-
-def appfirst_def(context : EmitContext) -> str:
-    return f"(lambda f : lambda p : ({pair('f ({})'.format(first('p', context)), second('p', context), context)}))"
-
-def appfirst(f : str, v : str, context : EmitContext) -> str:
-    return f"{mr(appfirst_def, context)} ({f}) ({v})"
-
-def appsecond_def(context : EmitContext) -> str:
-    return f"(lambda f : lambda p : ({pair(first('p', context), 'f ({})'.format(second('p', context)), context)}))"
-
-def appsecond(f : str, v : str, context : EmitContext) -> str:
-    return f"{mr(appsecond_def, context)} ({f}) ({v})"
-
-def succ_def(context: EmitContext) -> str:
-    return f"(lambda n : {appfirst(mr(csucc, context), 'n', context)})"
-
-def succ(n : str, context: EmitContext) -> str:
-    return f"{mr(succ_def, context)} ({n})"
-
-def pred_def(context : EmitContext) -> str:
-    return f"(lambda n : {appsecond(mr(csucc, context), 'n', context)})"
-
-def pred(n : str, context: EmitContext) -> str:
-    return f"{mr(pred_def(context), context)} ({n})"
-
-CONSTANTS = [false, true, pair_def, first_def, second_def, 
-    czero, zero, csucc, cplus, cmult, cexp, appfirst_def, appsecond_def, succ_def, pred_def]
 
 def print_assignment(var : str, value : str, context : EmitContext):
     print(f"{var} = {value}", end="")
@@ -143,12 +31,14 @@ def interpret_int(i : str, context : EmitContext):
 
 def string_of_value(val : Typed[ast.Value], context : EmitContext) -> str:
     if isinstance(val.element, ast.Number):
+        num = val.element.v
         result = zero(context)
-        for _ in range(val.element.v):
+        while num > 0:
             result = succ(result, context)
-        return f"({result})"
+            num //= 2
+        return f"{result}"
     if isinstance(val.element, ast.Bool):
-        return f"({mr(true, context)})" if val.element.v else f"({mr(false, context)})"
+        return f"{true(context) if val.element.v else false(context)}"
     raise InternalException("Unknown value " + str(val))
 
 def string_of_unop(exp : Typed[ast.Unop], context : EmitContext) -> str:
@@ -191,7 +81,6 @@ def emit_while(statement : ast.While, context : EmitContext):
 
 def emit_print(statement : ast.Print, context : EmitContext):
     exp = check_typed(statement.exp)
-    result = string_of_expr(exp, context)
     result = string_of_expr(exp, context)
     if context.debug():
         print_assignment("_value", result, context)
@@ -245,11 +134,12 @@ def emit(program : Typed[ast.Program], cli : CLI):
     if context.raw():
         print("import inspect\n")
     if context.debug():
-        for c in CONSTANTS:
+        for c in functions_to_write:
             # Get c(context)[1:-2] to clean up unneeded parens
             s = c(context)
             if not s.startswith("("):
                 raise InternalException("Badly formatted definition function " + s)
+            s = s[1:-1]
             print_assignment(f"{retrieve_name_constant(c)[0].upper().split('_')[0]}", s, context)
             print()
     context.interp = True
