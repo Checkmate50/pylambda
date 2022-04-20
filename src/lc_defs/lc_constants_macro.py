@@ -1,6 +1,5 @@
 from typing import List, Text, TextIO
 from io import TextIOWrapper
-import re
 
 PRED_STRING = """
 \"\"\"
@@ -12,6 +11,68 @@ To update, see lc_defs/README.md
 from src.util import *
 import inspect
 from typing import Set, List
+
+lc_inspector = \"\"\"
+import inspect
+
+class LambdaInspect:
+    def __init__(self, name : str = ""):
+        self.name = name
+        self.abstractions = []
+        self.callees = []
+        self.executing = False
+
+    def __str__(self):
+        return self.__repr__()
+
+    def __repr__(self):
+        return self.name
+
+    def output(self, calls):
+        if self in calls:
+            return self.name
+        calls.add(self)
+        a = ""
+        for layer in self.abstractions:
+            for item in layer:
+                a += f"lambda {item} : "
+        if len(a) > 0:
+            a += "("
+        clsp = ')' if len(a) > 0 else ''
+        if not self.name:
+            return f"{a}{' '.join(f'{x.output(calls)}' for x in self.callees)}{clsp}"
+        
+        spc = ' ' if len(self.callees) > 0 else ''
+        cs = ' '.join(['({})'.format(x.output(calls)) for x in self.callees])
+        return f"{a}{self.name}{spc}{cs}{clsp}"
+
+    def resolve(self, vars, calls):
+        if self in calls:
+            return self
+        calls.add(self)
+        for index in range(len(self.callees)):
+            while inspect.isfunction(self.callees[index]):
+                var = str(self.callees[index].__code__.co_varnames[0]) + "0"
+                while var in vars:
+                    last_number = -1
+                    for i in range(len(var)-1,-1,-1):
+                        if not var[i].isdigit():
+                            last_number = i
+                            break
+                    var = var[:last_number+1] + str(int(var[last_number+1:]) + 1)
+                vars.add(var)
+                self.abstractions[index].append(var)
+                self.callees[index] = self.callees[index](LambdaInspect(var))
+        for callee in self.callees:
+            if isinstance(callee, LambdaInspect):
+                callee.resolve(vars, calls)
+        return self
+
+    def __call__(self, other):
+        self.abstractions.append([])
+        self.callees.append(other)
+        return self
+\"\"\"
 
 class CLI:
     def __init__(self, args : Set[str] = set()):
@@ -89,13 +150,27 @@ def write_def_body(line0 : str, line1 : str, f : TextIOWrapper):
         args = []
     f.write(f"    return f\"(")
     for arg in args:
-        f.write(f"lambda {arg} : ")
+        f.write(f"lambda _{arg} : ")
     if len(args) > 0:
         f.write("(")
     line1 = line1.split('"')[1]
     for arg in args:
-        line1 = line1.replace(f"{{{arg}}}", f"{arg}")
-        line1 = re.sub(rf"([a-z]\(([a-z]*(\(\))?,\s)*){arg}((,\s[a-z\(]*)*\))", fr"\1'{arg}'\4", line1)
+        line1 = line1.replace(f"{{{arg}}}", f"_{arg}")
+        inside_brackets = False
+        marks = []
+        for i in range(len(line1)):
+            if line1[i] == "{":
+                inside_brackets = True
+            if line1[i] == "}":
+                inside_brackets = False
+            if line1[i:i+len(arg)] == arg:
+                if inside_brackets:
+                    if line1[i-2] == "," or line1[i-1] == "(":
+                        if line1[i+len(arg)] == ")" or line1[i+len(arg)] == ",":
+                            marks.append(i)
+        for i in marks[::-1]: # go in reverse to avoid string update shenanigans
+            line1 = line1[:i] + "'_" + line1[i:i+len(arg)] + "'" + line1[i+len(arg):]
+
     # manual regex-like crap cause matching is hard
     marks = []
     in_raw = False
@@ -111,7 +186,7 @@ def write_def_body(line0 : str, line1 : str, f : TextIOWrapper):
         if in_raw and str_start == -1 and line1[i].isalpha() and not in_quotes: # ignoring variables cleverly
             str_start = i
             continue
-        if str_start != -1 and not line1[i].isalpha():
+        if str_start != -1 and not (line1[i].isalpha() or line1[i].isdigit()):
             if line1[i] != "(":
                 marks.append((str_start, i))
             str_start = -1
@@ -120,7 +195,7 @@ def write_def_body(line0 : str, line1 : str, f : TextIOWrapper):
     valid_count = 0
     marks = []
     for item in range(len(line1)):        
-        if line1[item] == "(" and line1[item-1].isalpha():
+        if line1[item] == "(" and (line1[item-1].isalpha() or line1[item-1].isdigit()):
             valid_count += 1
         if line1[item] == ")" and valid_count > 0:
             valid_count -= 1

@@ -19,46 +19,79 @@ def interpret_bool(b : str, context : EmitContext):
     else:
         print(f"{b} (True) (False)", end="")
 
-def int_element_str(i : str, access, op : str, context : EmitContext):
-    return f"(({access(i, context)}) ({op}) (0))"
+def int_element_str(i : str, op : str, context : EmitContext):
+    return f"({op(i, context)} (lambda x : x + 1) (0))"
 
 def interpret_int(i : str, context : EmitContext):
     if context.cli.contains("raw"):
         print(f"{i}", end="")
     else:
-        print(int_element_str(i, first, "lambda x : x + 1", context) + 
-        " + " + int_element_str(i, second, "lambda x : x - 1", context), end="")
+        print(int_element_str(i, first, context) + " - " + int_element_str(i, second, context), end="")
 
 def string_of_value(val : Typed[ast.Value], context : EmitContext) -> str:
     if isinstance(val.element, ast.Number):
-        num = val.element.v
+        num = bin(val.element.v)[2:]
         result = zero(context)
-        while num > 0:
-            result = succ(result, context)
-            num //= 2
+        while len(num) > 0:
+            next = result if result == zero(context) else mult(result, two(context), context)
+            result = succ(next, context) if num[0] == "1" else next
+            num = num[1:]
         return f"{result}"
     if isinstance(val.element, ast.Bool):
         return f"{true(context) if val.element.v else false(context)}"
     raise InternalException("Unknown value " + str(val))
 
 def string_of_unop(exp : Typed[ast.Unop], context : EmitContext) -> str:
-    raise UnimplementedException(exp)
+    val = check_typed(exp.element.exp)
+    val = string_of_expr(val, context)
+    if exp.element.op.op == "-":
+        return neg(val, context)
+    if exp.element.op.op == "not":
+        return lnot(val, context)
 
 def string_of_binop(exp : Typed[ast.Binop], context : EmitContext) -> str:
-    raise UnimplementedException(exp)
+    left = check_typed(exp.element.left)
+    right = check_typed(exp.element.right)
+    left = string_of_expr(left, context)
+    right = string_of_expr(right, context)
+    if exp.element.op.op == "+":
+        return plus(left, right, context)
+    if exp.element.op.op == "-":
+        return minus(left, right, context)
+    if exp.element.op.op == "*":
+        return mult(left, right, context)
+    if exp.element.op.op == "^":
+        raise UnimplementedException(exp)
+    if exp.element.op.op == "and":
+        return land(left, right, context)
+    if exp.element.op.op == "or":
+        return lor(left, right, context)
+    if exp.element.op.op == "==":
+        raise UnimplementedException(exp)
+    if exp.element.op.op == "<":
+        raise UnimplementedException(exp)
+    if exp.element.op.op == ">":
+        raise UnimplementedException(exp)
+    if exp.element.op.op == "<=":
+        raise UnimplementedException(exp)
+    if exp.element.op.op == ">=":
+        raise UnimplementedException(exp)
+    raise InternalException("unknown op " + str(exp.element.op))
 
 def string_of_expr(exp : Typed[ast.Expr], context : EmitContext) -> str:
     if isinstance(exp.element, ast.Const):
         return string_of_value(check_typed(exp.element.v), context)
     if isinstance(exp.element, ast.Var):
-        return check_typed(exp.element.v).element
+        return exp.element.v
     if isinstance(exp.element, ast.Unop):
         return string_of_unop(exp, context)
     if isinstance(exp.element, ast.Binop):
         return string_of_binop(exp, context)
 
-def emit_assign(statement : ast.Assign, context : EmitContext):
-    UnimplementedException(statement)
+def emit_assign(statement : Typed[ast.Assign], context : EmitContext):
+    var = check_typed(statement.element.var)
+    exp = check_typed(statement.element.exp)
+    print(f"{var.element.v} = {string_of_expr(exp, context)}",end="")
 
 def emit_seq(statement : ast.Seq, context : EmitContext):
     s1 = check_typed(statement.s1)
@@ -68,16 +101,16 @@ def emit_seq(statement : ast.Seq, context : EmitContext):
     emit_statement(s2, context)
 
 def emit_if(statement : ast.If, context : EmitContext):
-    UnimplementedException(statement)
+    raise UnimplementedException(statement)
 
 def emit_elif(statement : ast.Elif, context : EmitContext):
-    UnimplementedException(statement)
+    raise UnimplementedException(statement)
 
 def emit_else(statement : ast.Else, context : EmitContext):
-    UnimplementedException(statement)
+    raise UnimplementedException(statement)
 
 def emit_while(statement : ast.While, context : EmitContext):
-    UnimplementedException(statement)
+    raise UnimplementedException(statement)
 
 def emit_print(statement : ast.Print, context : EmitContext):
     exp = check_typed(statement.exp)
@@ -97,7 +130,7 @@ def emit_print(statement : ast.Print, context : EmitContext):
     else:
         raise UnimplementedException(statement)
     if context.cli.contains("raw"):
-        print("\nprint(str(inspect.getsourcelines(_func)[0]).strip(\"['\\\\n']\").split(\" = \")[1])", end="")
+        print("\nprint(LambdaInspect()(_func).resolve(set(), set()).output(set()))", end="")
     else:
         print(")", end="")
 
@@ -132,7 +165,7 @@ def emit_statement(statement : Typed[ast.Statement], context : EmitContext):
 def emit(program : Typed[ast.Program], cli : CLI):
     context = EmitContext(cli)
     if context.raw():
-        print("import inspect\n")
+        print(lc_inspector)
     if context.debug():
         for c in functions_to_write:
             # Get c(context)[1:-2] to clean up unneeded parens

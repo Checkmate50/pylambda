@@ -42,8 +42,8 @@ class Const(Expr):
         return "Const " + str(self.v)
 
 class Var(Expr):
-    def __init__(self, v : Union[str, Typed[str]]):
-        util.typecheck_any(v, [str, Typed])
+    def __init__(self, v : str):
+        util.typecheck(v, str)
         self.v = v
     def __repr__(self):
         return "Var " + str(self.v)

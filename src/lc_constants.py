@@ -9,6 +9,68 @@ from src.util import *
 import inspect
 from typing import Set, List
 
+lc_inspector = """
+import inspect
+
+class LambdaInspect:
+    def __init__(self, name : str = ""):
+        self.name = name
+        self.abstractions = []
+        self.callees = []
+        self.executing = False
+
+    def __str__(self):
+        return self.__repr__()
+
+    def __repr__(self):
+        return self.name
+
+    def output(self, calls):
+        if self in calls:
+            return self.name
+        calls.add(self)
+        a = ""
+        for layer in self.abstractions:
+            for item in layer:
+                a += f"lambda {item} : "
+        if len(a) > 0:
+            a += "("
+        clsp = ')' if len(a) > 0 else ''
+        if not self.name:
+            return f"{a}{' '.join(f'{x.output(calls)}' for x in self.callees)}{clsp}"
+        
+        spc = ' ' if len(self.callees) > 0 else ''
+        cs = ' '.join(['({})'.format(x.output(calls)) for x in self.callees])
+        return f"{a}{self.name}{spc}{cs}{clsp}"
+
+    def resolve(self, vars, calls):
+        if self in calls:
+            return self
+        calls.add(self)
+        for index in range(len(self.callees)):
+            while inspect.isfunction(self.callees[index]):
+                var = str(self.callees[index].__code__.co_varnames[0]) + "0"
+                while var in vars:
+                    last_number = -1
+                    for i in range(len(var)-1,-1,-1):
+                        if not var[i].isdigit():
+                            last_number = i
+                            break
+                    var = var[:last_number+1] + str(int(var[last_number+1:]) + 1)
+                vars.add(var)
+                self.abstractions[index].append(var)
+                self.callees[index] = self.callees[index](LambdaInspect(var))
+        for callee in self.callees:
+            if isinstance(callee, LambdaInspect):
+                callee.resolve(vars, calls)
+        return self
+
+    def __call__(self, other):
+        self.abstractions.append([])
+        self.callees.append(other)
+        return self
+"""
+
 class CLI:
     def __init__(self, args : Set[str] = set()):
         self.set_args(args)
@@ -59,49 +121,91 @@ def app_lc(f, args : List[str], context : EmitContext) -> str:
     return f"{mr(f, context)}{' ' if len(args) > 0 else ''}{' '.join(['({})'.format(x) for x in args])}"
 
 def false_def(context : EmitContext) -> str:
-    return f"(lambda x : lambda y : y)"
+    return f"(lambda _x : lambda _y : _y)"
 def false(context : EmitContext) -> str:
     return f"{app_lc(false_def, [], context)}"
 
 functions_to_write.append(false_def)
 
 def true_def(context : EmitContext) -> str:
-    return f"(lambda x : lambda y : x)"
+    return f"(lambda _x : lambda _y : _x)"
 def true(context : EmitContext) -> str:
     return f"{app_lc(true_def, [], context)}"
 
 functions_to_write.append(true_def)
 
+def lif_def(context : EmitContext) -> str:
+    return f"(lambda _b : lambda _c : lambda _d : (_b (_c) (_d)))"
+def lif(b : str, c : str, d : str, context : EmitContext) -> str:
+    return f"{app_lc(lif_def, [b, c, d], context)}"
+
+functions_to_write.append(lif_def)
+
+def lnot_def(context : EmitContext) -> str:
+    return f"(lambda _b : ({lif('_b', false(context), true(context), context)}))"
+def lnot(b : str, context : EmitContext) -> str:
+    return f"{app_lc(lnot_def, [b], context)}"
+
+functions_to_write.append(lnot_def)
+
+def land_def(context : EmitContext) -> str:
+    return f"(lambda _b1 : lambda _b2 : ({lif('_b1', '_b2', false(context), context)}))"
+def land(b1 : str, b2 : str, context : EmitContext) -> str:
+    return f"{app_lc(land_def, [b1, b2], context)}"
+
+functions_to_write.append(land_def)
+
+def lor_def(context : EmitContext) -> str:
+    return f"(lambda _b1 : lambda _b2 : ({lif('_b1', true(context), '_b2', context)}))"
+def lor(b1 : str, b2 : str, context : EmitContext) -> str:
+    return f"{app_lc(lor_def, [b1, b2], context)}"
+
+functions_to_write.append(lor_def)
+
+def xor_def(context : EmitContext) -> str:
+    return f"(lambda _b1 : lambda _b2 : ({lif('_b1', lnot('_b2', context), '_b2', context)}))"
+def xor(b1 : str, b2 : str, context : EmitContext) -> str:
+    return f"{app_lc(xor_def, [b1, b2], context)}"
+
+functions_to_write.append(xor_def)
+
 def app_def(context : EmitContext) -> str:
-    return f"(lambda x : lambda y : (x (y)))"
+    return f"(lambda _x : lambda _y : (_x (_y)))"
 def app(x : str, y : str, context : EmitContext) -> str:
     return f"{app_lc(app_def, [x, y], context)}"
 
 functions_to_write.append(app_def)
 
+def app2_def(context : EmitContext) -> str:
+    return f"(lambda _x : lambda _y : lambda _z : (_x (_y) (_z)))"
+def app2(x : str, y : str, z : str, context : EmitContext) -> str:
+    return f"{app_lc(app2_def, [x, y, z], context)}"
+
+functions_to_write.append(app2_def)
+
 def pair_def(context : EmitContext) -> str:
-    return f"(lambda x : lambda y : lambda f : (f (x) (y)))"
+    return f"(lambda _x : lambda _y : (lambda _f : (_f (_x) (_y))))"
 def pair(x : str, y : str, context : EmitContext) -> str:
     return f"{app_lc(pair_def, [x, y], context)}"
 
 functions_to_write.append(pair_def)
 
 def first_def(context : EmitContext) -> str:
-    return f"(lambda x : (x ({false(context)})))"
+    return f"(lambda _x : (_x ({true(context)})))"
 def first(x : str, context : EmitContext) -> str:
     return f"{app_lc(first_def, [x], context)}"
 
 functions_to_write.append(first_def)
 
 def second_def(context : EmitContext) -> str:
-    return f"(lambda x : (x ({false(context)})))"
+    return f"(lambda _x : (_x ({false(context)})))"
 def second(x : str, context : EmitContext) -> str:
     return f"{app_lc(second_def, [x], context)}"
 
 functions_to_write.append(second_def)
 
 def czero_def(context : EmitContext) -> str:
-    return f"(lambda f : lambda x : x)"
+    return f"(lambda _f : lambda _x : _x)"
 def czero(context : EmitContext) -> str:
     return f"{app_lc(czero_def, [], context)}"
 
@@ -115,63 +219,56 @@ def zero(context : EmitContext) -> str:
 functions_to_write.append(zero_def)
 
 def csucc_def(context : EmitContext) -> str:
-    return f"(lambda n : (lambda f : lambda x : (f (n (f) (x)))))"
+    return f"(lambda _n : (lambda _f : lambda _x : (_f (_n (_f) (_x)))))"
 def csucc(n : str, context : EmitContext) -> str:
     return f"{app_lc(csucc_def, [n], context)}"
 
 functions_to_write.append(csucc_def)
 
 def cplus_def(context : EmitContext) -> str:
-    return f"(lambda m : lambda n : (m ({mr(csucc, context)}) (n)))"
+    return f"(lambda _m : lambda _n : (_m ({mr(csucc, context)}) (_n)))"
 def cplus(m : str, n : str, context : EmitContext) -> str:
     return f"{app_lc(cplus_def, [m, n], context)}"
 
 functions_to_write.append(cplus_def)
 
 def cmult_def(context : EmitContext) -> str:
-    return f"(lambda m : lambda n : (lambda f : (m (n (f)))))"
+    return f"(lambda _m : lambda _n : (lambda _f : (_m (_n (_f)))))"
 def cmult(m : str, n : str, context : EmitContext) -> str:
     return f"{app_lc(cmult_def, [m, n], context)}"
 
 functions_to_write.append(cmult_def)
 
 def cexp_def_def(context : EmitContext) -> str:
-    return f"(lambda b : lambda e : (e (b)))"
+    return f"(lambda _b : lambda _e : (_e (_b)))"
 def cexp_def(b : str, e : str, context : EmitContext) -> str:
     return f"{app_lc(cexp_def_def, [b, e], context)}"
 
 functions_to_write.append(cexp_def_def)
 
 def appfirst_def(context : EmitContext) -> str:
-    return f"(lambda f : lambda p : ({pair(app('f', first('p', context), context), second('p', context), context)}))"
+    return f"(lambda _f : lambda _p : ({pair(app('_f', first('_p', context), context), second('_p', context), context)}))"
 def appfirst(f : str, p : str, context : EmitContext) -> str:
     return f"{app_lc(appfirst_def, [f, p], context)}"
 
 functions_to_write.append(appfirst_def)
 
 def appsecond_def(context : EmitContext) -> str:
-    return f"(lambda f : lambda p : ({pair(first('p', context), app('f', second('p', context), context), context)}))"
+    return f"(lambda _f : lambda _p : ({pair(first('_p', context), app('_f', second('_p', context), context), context)}))"
 def appsecond(f : str, p : str, context : EmitContext) -> str:
     return f"{app_lc(appsecond_def, [f, p], context)}"
 
 functions_to_write.append(appsecond_def)
 
-def appboth_def(context : EmitContext) -> str:
-    return f"(lambda f : lambda p : ({pair(app('f', first('p', context), context), app('f', second('p', context), context), context)}))"
-def appboth(f : str, p : str, context : EmitContext) -> str:
-    return f"{app_lc(appboth_def, [f, p], context)}"
-
-functions_to_write.append(appboth_def)
-
 def succ_def(context : EmitContext) -> str:
-    return f"(lambda n : ({appfirst(mr(csucc, context), 'n', context)}))"
+    return f"(lambda _n : ({appfirst(mr(csucc, context), '_n', context)}))"
 def succ(n : str, context : EmitContext) -> str:
     return f"{app_lc(succ_def, [n], context)}"
 
 functions_to_write.append(succ_def)
 
 def pred_def(context : EmitContext) -> str:
-    return f"(lambda n : ({appsecond(mr(csucc, context), 'n', context)}))"
+    return f"(lambda _n : ({appsecond(mr(csucc, context), '_n', context)}))"
 def pred(n : str, context : EmitContext) -> str:
     return f"{app_lc(pred_def, [n], context)}"
 
@@ -183,4 +280,53 @@ def one(context : EmitContext) -> str:
     return f"{app_lc(one_def, [], context)}"
 
 functions_to_write.append(one_def)
+
+def two_def(context : EmitContext) -> str:
+    return f"({succ(one(context), context)})"
+def two(context : EmitContext) -> str:
+    return f"{app_lc(two_def, [], context)}"
+
+functions_to_write.append(two_def)
+
+def neg_def(context : EmitContext) -> str:
+    return f"(lambda _n : ({pair(second('_n', context), first('_n', context), context)}))"
+def neg(n : str, context : EmitContext) -> str:
+    return f"{app_lc(neg_def, [n], context)}"
+
+functions_to_write.append(neg_def)
+
+def plus_def(context : EmitContext) -> str:
+    return f"(lambda _n : lambda _m : ({pair(app2(mr(cplus, context), first('_n', context), first('_m', context), context), app2(mr(cplus, context), second('_n', context), second('_m', context), context), context)}))"
+def plus(n : str, m : str, context : EmitContext) -> str:
+    return f"{app_lc(plus_def, [n, m], context)}"
+
+functions_to_write.append(plus_def)
+
+def minus_def(context : EmitContext) -> str:
+    return f"(lambda _n : lambda _m : ({pair(app2(mr(cplus, context), first('_n', context), second('_m', context), context), app2(mr(cplus, context), second('_n', context), first('_m', context), context), context)}))"
+def minus(n : str, m : str, context : EmitContext) -> str:
+    return f"{app_lc(minus_def, [n, m], context)}"
+
+functions_to_write.append(minus_def)
+
+def mult_def(context : EmitContext) -> str:
+    return f"(lambda _n : lambda _m : ({pair(app2(mr(cplus, context), app2(mr(cmult, context), first('_n', context), first('_m', context), context), app2(mr(cmult, context), second('_n', context), second('_m', context), context), context), app2(mr(cplus, context), app2(mr(cmult, context), first('_n', context), second('_m', context), context), app2(mr(cmult, context), second('_n', context), first('_m', context), context), context), context)}))"
+def mult(n : str, m : str, context : EmitContext) -> str:
+    return f"{app_lc(mult_def, [n, m], context)}"
+
+functions_to_write.append(mult_def)
+
+def z_def(context : EmitContext) -> str:
+    return f"(lambda _f : ((lambda _x : _f (lambda _v : _x (_x) (_v))) (lambda _x : _f (lambda _v : _x (_x) (_v)))))"
+def z(f : str, context : EmitContext) -> str:
+    return f"{app_lc(z_def, [f], context)}"
+
+functions_to_write.append(z_def)
+
+def iszero_def(context : EmitContext) -> str:
+    return f"(lambda _n : ({first('_n', context)} (lambda _x : lambda _a : lambda _b : _b) (lambda _x : lambda _y : _x)))"
+def iszero(n : str, context : EmitContext) -> str:
+    return f"{app_lc(iszero_def, [n], context)}"
+
+functions_to_write.append(iszero_def)
 

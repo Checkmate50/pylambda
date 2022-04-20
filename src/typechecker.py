@@ -49,7 +49,7 @@ def check_var(var : Union[ast.Var, Typed], context : TypeContext) -> Typed[str]:
         raise InternalException("Unexpected Typed var " + str(var))
     if isinstance(var.v, Typed):
         raise InternalException("Unexpected Typed v in" + str(var))
-    return Typed(var.v, context.get_var(var.v))
+    return Typed(var, context.get_var(var.v))
 
 def match_unop(to_check : Tuple[str, BaseType], expect : Tuple[str, Type[BaseType]], context) -> bool:
     if to_check[0] != expect[0]:
@@ -116,7 +116,6 @@ def check_assign(statement : ast.Assign, context : TypeContext) -> Typed[ast.Ass
         raise InternalException("Unexpected typed var in " + str(statement))
     statement.exp = check_expr(statement.exp, context)
     context.add_var(statement.var.v, statement.exp.typ)
-    statement.var.v = Typed(statement.var.v, statement.exp.typ)
     statement.var = Typed(statement.var, statement.exp.typ)
     return Typed(statement, UnitType())
 
