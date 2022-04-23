@@ -177,8 +177,11 @@ def emit_statement(statement : Typed[ast.Statement], context : EmitContext):
     else:
         raise InternalException("Unimplemented statement " + str(statement))
 
+import sys
 def emit(program : Typed[ast.Program], cli : CLI):
     context = EmitContext(cli)
+    print("import sys")
+    print("sys.setrecursionlimit(100000) # This is fine, nothing can possibly go wrong")
     print("def _raise(x): raise x # stupid lambdas and stupid statements")
     if context.raw():
         print(lc_inspector)
