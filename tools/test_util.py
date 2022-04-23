@@ -2,7 +2,7 @@ import subprocess
 from typing import Optional, List
 
 def interpret_file(command : str, filename : str) -> Optional[str]:
-    interp = subprocess.Popen(["python", f"{command}.py", filename], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    interp = subprocess.Popen(["python", f"{command}.py", filename, "--no-input"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     interp_out = subprocess.Popen(["python", "-"], stdin=interp.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     res1 = interp.stderr.read()
     if res1 != b"":
