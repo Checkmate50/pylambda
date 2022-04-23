@@ -98,6 +98,9 @@ class EmitContext(BaseClass):
 
     def debug(self):
         return self.cli.contains("debug")
+    
+    def no_input(self):
+        return self.cli.contains("no-input")
 
     def __repr__(self):
         return "EMIT_CONTEXT" + str(self.cli)
@@ -108,7 +111,7 @@ def retrieve_name_constant(var : any) -> List[str]:
     callers_local_vars = inspect.currentframe().f_globals.items()
     return [var_name for var_name, var_val in callers_local_vars if var_val is var]
 
-# maybe_debug is too long to type
+# maybe_replace is too long to type
 def mr(val, context : EmitContext) -> str:
     if context.debug():
         return f"{retrieve_name_constant(val)[0].upper().split('_')[0]}"

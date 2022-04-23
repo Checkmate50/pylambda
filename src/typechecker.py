@@ -19,7 +19,7 @@ class TypeContext(BaseClass):
     def get_var(self, x : str) -> BaseType:
         typecheck(x, str)
         if x not in self.vars:
-            TypeException("undefined variable " + str(x), self)
+            raise TypeException("undefined variable " + str(x), self)
         return self.vars[x]
 
     def add_var(self, x : str, t : BaseType):
@@ -144,7 +144,6 @@ def check_input(statement : ast.Input, context : TypeContext) -> Typed[ast.Input
     if isinstance(statement.var, Typed) or isinstance(statement.var.v, Typed):
         raise InternalException("Unexpected typed var in " + str(statement))
     context.add_var(statement.var.v, IntType())
-    statement.var.v = Typed(statement.var.v, IntType())
     statement.var = Typed(statement.var, IntType())
     return Typed(statement, UnitType())
 

@@ -4,6 +4,8 @@ from src.typed_ast import Typed, IntType, BoolType, UnitType, BaseType
 from typing import TypeVar, Union
 from src.lc_constants import *
 
+internal_consts = []
+
 T = TypeVar('T')
 
 def check_typed(term : Union[BaseClass, Typed[T]]) -> Typed[T]:
@@ -91,6 +93,8 @@ def string_of_expr(exp : Typed[ast.Expr], context : EmitContext) -> str:
 def emit_assign(statement : Typed[ast.Assign], context : EmitContext):
     var = check_typed(statement.element.var)
     exp = check_typed(statement.element.exp)
+    if var.element.v in internal_consts:
+        raise Exception("Compile-time error: use of reserved name " + var.element.v)
     print(f"{var.element.v} = {string_of_expr(exp, context)}",end="")
 
 def emit_seq(statement : ast.Seq, context : EmitContext):
@@ -136,7 +140,12 @@ def emit_print(statement : ast.Print, context : EmitContext):
 
 def emit_input(statement : ast.Input, context : EmitContext):
     var = check_typed(statement.var)
-    print_assignment(var, "input()", context)
+    if var.element.v in internal_consts:
+        raise Exception("Compile-time error: use of reserved name " + var.element.v)
+    if context.no_input():
+        print_assignment(var.element.v, zero(context), context)
+    else:
+        print_assignment(var.element.v, "input()", context)
 
 def emit_statement(statement : Typed[ast.Statement], context : EmitContext):
     if isinstance(statement.element, ast.Skip):
@@ -173,7 +182,8 @@ def emit(program : Typed[ast.Program], cli : CLI):
             if not s.startswith("("):
                 raise InternalException("Badly formatted definition function " + s)
             s = s[1:-1]
-            print_assignment(f"{retrieve_name_constant(c)[0].upper().split('_')[0]}", s, context)
+            internal_consts.append(f"{retrieve_name_constant(c)[0].upper().split('_')[0]}")
+            print_assignment(internal_consts[-1], s, context)
             print()
     context.interp = True
     emit_statement(check_typed(program.element.s), context)

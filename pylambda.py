@@ -4,7 +4,7 @@ from src.typechecker import typecheck_program
 from src.emitter import emit, CLI
 
 def help():
-    print("Expected args: python pylambda.py name_of_file.pylambda [--debug | --raw]")
+    print("Expected args: python pylambda.py name_of_file.pylambda [--debug | --raw | --no-input]")
 
 def main():
     if len(argv) < 2:
