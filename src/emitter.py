@@ -62,8 +62,12 @@ def string_of_binop(exp : Typed[ast.Binop], context : EmitContext) -> str:
         return minus(left, right, context)
     if exp.element.op.op == "*":
         return mult(left, right, context)
+    if exp.element.op.op == "/":
+        return div(left, right, context)
+    if exp.element.op.op == "%":
+        return mod(left, right, context)
     if exp.element.op.op == "^":
-        raise UnimplementedException(exp)
+        return exponent(left, right, context)
     if exp.element.op.op == "and":
         return land(left, right, context)
     if exp.element.op.op == "or":
@@ -131,6 +135,8 @@ def emit_print(statement : ast.Print, context : EmitContext):
         interpret_bool(result, context)
     elif isinstance(exp.typ, IntType):
         interpret_int(result, context)
+    elif isinstance(exp.typ, UnitType):
+        print("()",end="")
     else:
         raise UnimplementedException(statement)
     if context.cli.contains("raw"):
@@ -173,6 +179,7 @@ def emit_statement(statement : Typed[ast.Statement], context : EmitContext):
 
 def emit(program : Typed[ast.Program], cli : CLI):
     context = EmitContext(cli)
+    print("def _raise(x): raise x # stupid lambdas and stupid statements")
     if context.raw():
         print(lc_inspector)
     if context.debug():

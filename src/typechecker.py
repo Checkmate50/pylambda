@@ -90,7 +90,7 @@ def check_binop(b : ast.Binop, context : TypeContext) -> Typed[ast.Binop]:
     b.left = check_expr(b.left, context)
     b.right = check_expr(b.right, context)
     check = (b.op.op, b.left.typ, b.right.typ)
-    if match_binop(check, (["+", "-", "*", "^"], IntType, IntType), context):
+    if match_binop(check, (["+", "-", "*", "%", "/", "^"], IntType, IntType), context):
         return Typed(b, IntType())
     if match_binop(check, (["<", ">", "<=", ">="], IntType, IntType), context):
         return Typed(b, BoolType())

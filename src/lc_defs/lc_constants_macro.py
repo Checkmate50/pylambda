@@ -1,5 +1,6 @@
 from typing import List, Text, TextIO
 from io import TextIOWrapper
+from re import sub
 
 PRED_STRING = """
 \"\"\"
@@ -125,6 +126,9 @@ def mr(val, context : EmitContext) -> str:
 
 def app_lc(f, args : List[str], context : EmitContext) -> str:
     return f"{mr(f, context)}{' ' if len(args) > 0 else ''}{' '.join(['({})'.format(x) for x in args])}"
+
+def emit_runtime_error_thunk(message : str, context : EmitContext) -> str:
+    return f"lambda:_raise(RuntimeError(\\\"{message}\\\"))"
 """
 
 def parse_defs(f : TextIOWrapper, data) -> List[List[str]]:
@@ -152,6 +156,8 @@ def write_def_body(line0 : str, line1 : str, f : TextIOWrapper):
     if args[0] == '':
         args = []
     f.write(f"    return f\"(")
+    if "_rec" in line1:
+        f.write("{mr(z_def, context)}(lambda _rec : ")
     for arg in args:
         f.write(f"lambda _{arg} : ")
     if len(args) > 0:
@@ -189,7 +195,7 @@ def write_def_body(line0 : str, line1 : str, f : TextIOWrapper):
         if in_raw and str_start == -1 and line1[i].isalpha() and not in_quotes: # ignoring variables cleverly
             str_start = i
             continue
-        if str_start != -1 and not (line1[i].isalpha() or line1[i].isdigit()):
+        if str_start != -1 and not (line1[i].isalpha() or line1[i].isdigit() or line1[i] == "_"):
             if line1[i] != "(":
                 marks.append((str_start, i))
             str_start = -1
@@ -197,10 +203,13 @@ def write_def_body(line0 : str, line1 : str, f : TextIOWrapper):
         line1 = f"{line1[:i[0]]}mr({line1[i[0]:i[1]]}){line1[i[1]:]}"
     valid_count = 0
     marks = []
-    for item in range(len(line1)):        
+    in_quotes = False
+    for item in range(len(line1)):
+        if line1[item] == "'":
+            in_quotes = not in_quotes    
         if line1[item] == "(" and (line1[item-1].isalpha() or line1[item-1].isdigit()):
             valid_count += 1
-        if line1[item] == ")" and valid_count > 0:
+        if line1[item] == ")" and valid_count > 0 and not in_quotes:
             valid_count -= 1
             marks.append(item)
     for i in marks[::-1]: # go in reverse to avoid string update shenanigans
@@ -209,6 +218,8 @@ def write_def_body(line0 : str, line1 : str, f : TextIOWrapper):
             c = ", " + c
         line1 = f"{line1[:i]}{c}{line1[i:]}"
     f.write(line1)
+    if "_rec" in line1 and line0.split("(")[0].split(" ")[1] != "z":
+        f.write(")")
     f.write((")" if len(args) > 0 else "") + ")\"")
     f.write("\n")
 

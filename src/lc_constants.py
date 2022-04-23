@@ -123,6 +123,30 @@ def mr(val, context : EmitContext) -> str:
 def app_lc(f, args : List[str], context : EmitContext) -> str:
     return f"{mr(f, context)}{' ' if len(args) > 0 else ''}{' '.join(['({})'.format(x) for x in args])}"
 
+def emit_runtime_error_thunk(message : str, context : EmitContext) -> str:
+    return f"lambda:_raise(RuntimeError(\"{message}\"))"
+
+def app_def(context : EmitContext) -> str:
+    return f"(lambda _x : lambda _y : (_x (_y)))"
+def app(x : str, y : str, context : EmitContext) -> str:
+    return f"{app_lc(app_def, [x, y], context)}"
+
+functions_to_write.append(app_def)
+
+def app2_def(context : EmitContext) -> str:
+    return f"(lambda _x : lambda _y : lambda _z : (_x (_y) (_z)))"
+def app2(x : str, y : str, z : str, context : EmitContext) -> str:
+    return f"{app_lc(app2_def, [x, y, z], context)}"
+
+functions_to_write.append(app2_def)
+
+def thunk_def(context : EmitContext) -> str:
+    return f"(lambda _x : (lambda:_x))"
+def thunk(x : str, context : EmitContext) -> str:
+    return f"{app_lc(thunk_def, [x], context)}"
+
+functions_to_write.append(thunk_def)
+
 def false_def(context : EmitContext) -> str:
     return f"(lambda _x : lambda _y : _y)"
 def false(context : EmitContext) -> str:
@@ -172,20 +196,6 @@ def xor(b1 : str, b2 : str, context : EmitContext) -> str:
 
 functions_to_write.append(xor_def)
 
-def app_def(context : EmitContext) -> str:
-    return f"(lambda _x : lambda _y : (_x (_y)))"
-def app(x : str, y : str, context : EmitContext) -> str:
-    return f"{app_lc(app_def, [x, y], context)}"
-
-functions_to_write.append(app_def)
-
-def app2_def(context : EmitContext) -> str:
-    return f"(lambda _x : lambda _y : lambda _z : (_x (_y) (_z)))"
-def app2(x : str, y : str, z : str, context : EmitContext) -> str:
-    return f"{app_lc(app2_def, [x, y, z], context)}"
-
-functions_to_write.append(app2_def)
-
 def pair_def(context : EmitContext) -> str:
     return f"(lambda _x : lambda _y : (lambda _f : (_f (_x) (_y))))"
 def pair(x : str, y : str, context : EmitContext) -> str:
@@ -222,25 +232,32 @@ def csucc(n : str, context : EmitContext) -> str:
 functions_to_write.append(csucc_def)
 
 def cplus_def(context : EmitContext) -> str:
-    return f"(lambda _m : lambda _n : ({app2('_m', mr(csucc, context), '_n', context)}))"
-def cplus(m : str, n : str, context : EmitContext) -> str:
-    return f"{app_lc(cplus_def, [m, n], context)}"
+    return f"(lambda _n : lambda _m : ({app2('_n', mr(csucc, context), '_m', context)}))"
+def cplus(n : str, m : str, context : EmitContext) -> str:
+    return f"{app_lc(cplus_def, [n, m], context)}"
 
 functions_to_write.append(cplus_def)
 
 def cmult_def(context : EmitContext) -> str:
-    return f"(lambda _m : lambda _n : (lambda _f : (_m (_n (_f)))))"
-def cmult(m : str, n : str, context : EmitContext) -> str:
-    return f"{app_lc(cmult_def, [m, n], context)}"
+    return f"(lambda _n : lambda _m : (lambda _f : (_n (_m (_f)))))"
+def cmult(n : str, m : str, context : EmitContext) -> str:
+    return f"{app_lc(cmult_def, [n, m], context)}"
 
 functions_to_write.append(cmult_def)
 
-def cexp_def_def(context : EmitContext) -> str:
+def cexp_def(context : EmitContext) -> str:
     return f"(lambda _b : lambda _e : (_e (_b)))"
-def cexp_def(b : str, e : str, context : EmitContext) -> str:
-    return f"{app_lc(cexp_def_def, [b, e], context)}"
+def cexp(b : str, e : str, context : EmitContext) -> str:
+    return f"{app_lc(cexp_def, [b, e], context)}"
 
-functions_to_write.append(cexp_def_def)
+functions_to_write.append(cexp_def)
+
+def ctwo_def(context : EmitContext) -> str:
+    return f"({csucc(csucc(czero(context), context), context)})"
+def ctwo(context : EmitContext) -> str:
+    return f"{app_lc(ctwo_def, [], context)}"
+
+functions_to_write.append(ctwo_def)
 
 def appfirst_def(context : EmitContext) -> str:
     return f"(lambda _f : lambda _p : ({pair(app('_f', first('_p', context), context), second('_p', context), context)}))"
@@ -361,6 +378,13 @@ def ceq(n : str, m : str, context : EmitContext) -> str:
 
 functions_to_write.append(ceq_def)
 
+def clt_def(context : EmitContext) -> str:
+    return f"(lambda _n : lambda _m : ({land(cleq('_n', '_m', context), lnot(cleq('_m', '_n', context), context), context)}))"
+def clt(n : str, m : str, context : EmitContext) -> str:
+    return f"{app_lc(clt_def, [n, m], context)}"
+
+functions_to_write.append(clt_def)
+
 def eq_def(context : EmitContext) -> str:
     return f"(lambda _n : lambda _m : ({ceq(cplus(first('_n', context), second('_m', context), context), cplus(second('_n', context), first('_m', context), context), context)}))"
 def eq(n : str, m : str, context : EmitContext) -> str:
@@ -396,10 +420,52 @@ def gt(n : str, m : str, context : EmitContext) -> str:
 
 functions_to_write.append(gt_def)
 
+def collapse_def(context : EmitContext) -> str:
+    return f"(lambda _n : ({lif(clt(second('_n', context), first('_n', context), context), csub(first('_n', context), second('_n', context), context), csub(second('_n', context), first('_n', context), context), context)}))"
+def collapse(n : str, context : EmitContext) -> str:
+    return f"{app_lc(collapse_def, [n], context)}"
+
+functions_to_write.append(collapse_def)
+
 def z_def(context : EmitContext) -> str:
-    return f"(lambda _f : ((lambda _x : _f (lambda _v : _x (_x) (_v))) (lambda _x : _f (lambda _v : _x (_x) (_v)))))"
-def z(f : str, context : EmitContext) -> str:
-    return f"{app_lc(z_def, [f], context)}"
+    return f"(lambda _rec : ((lambda _x : _rec (lambda _v : _x (_x) (_v))) (lambda _x : _rec (lambda _v : _x (_x) (_v)))))"
+def z(rec : str, context : EmitContext) -> str:
+    return f"{app_lc(z_def, [rec], context)}"
 
 functions_to_write.append(z_def)
+
+def cdiv_def(context : EmitContext) -> str:
+    return f"({mr(z_def, context)}(lambda _rec : lambda _n : lambda _m : (({lif(ciszero('_m', context), emit_runtime_error_thunk('Divide by zero', context), thunk('('+lif(clt('_n', '_m', context), thunk(czero(context), context), '(lambda:'+csucc(app2('_rec', csub('_n', '_m', context), '_m', context), context)+')', context), context)+')()', context)})())))"
+def cdiv(n : str, m : str, context : EmitContext) -> str:
+    return f"{app_lc(cdiv_def, [n, m], context)}"
+
+functions_to_write.append(cdiv_def)
+
+def cmod_def(context : EmitContext) -> str:
+    return f"({mr(z_def, context)}(lambda _rec : lambda _n : lambda _m : (({lif(ciszero('_m', context), emit_runtime_error_thunk('Mod by zero', context), thunk('('+lif(clt('_n', '_m', context), thunk('_n', context), '(lambda:'+app2('_rec', csub('_n', '_m', context), '_m', context)+')', context), context)+')()', context)})())))"
+def cmod(n : str, m : str, context : EmitContext) -> str:
+    return f"{app_lc(cmod_def, [n, m], context)}"
+
+functions_to_write.append(cmod_def)
+
+def div_def(context : EmitContext) -> str:
+    return f"(lambda _n : lambda _m : ({lif(xor(clt(second('_n', context), first('_n', context), context), clt(second('_m', context), first('_m', context), context), context), pair(czero(context), cdiv(collapse('_n', context), collapse('_m', context), context), context), pair(cdiv(collapse('_n', context), collapse('_m', context), context), czero(context), context), context)}))"
+def div(n : str, m : str, context : EmitContext) -> str:
+    return f"{app_lc(div_def, [n, m], context)}"
+
+functions_to_write.append(div_def)
+
+def mod_def(context : EmitContext) -> str:
+    return f"(lambda _n : lambda _m : (({lif(lor(clt(first('_n', context), second('_n', context), context), clt(first('_m', context), second('_m', context), context), context), emit_runtime_error_thunk('Mod not permitted with negatives', context), thunk(pair(cmod(collapse('_n', context), collapse('_m', context), context), czero(context), context), context), context)})()))"
+def mod(n : str, m : str, context : EmitContext) -> str:
+    return f"{app_lc(mod_def, [n, m], context)}"
+
+functions_to_write.append(mod_def)
+
+def exponent_def(context : EmitContext) -> str:
+    return f"(lambda _n : lambda _m : (({lif(clt(first('_m', context), second('_m', context), context), emit_runtime_error_thunk('Negative exponent not permitted', context), thunk(lif(lor(cleq(second('_n', context), first('_n', context), context), ciszero(cmod(collapse('_m', context), ctwo(context), context), context), context), pair(cexp(collapse('_n', context), collapse('_m', context), context), czero(context), context), pair(czero(context), cexp(collapse('_n', context), collapse('_m', context), context), context), context), context), context)})()))"
+def exponent(n : str, m : str, context : EmitContext) -> str:
+    return f"{app_lc(exponent_def, [n, m], context)}"
+
+functions_to_write.append(exponent_def)
 

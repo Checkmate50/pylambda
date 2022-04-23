@@ -6,7 +6,7 @@ from typing import List, Optional, Union, Callable
 reserved = ("true", "false", "print", "input", "output", "while", "if", "else")
 
 # This is actually so cool
-binop_precedence = [("and", "or"), ("==", "<", ">", "<=", ">="), ("+", "-"), ("*"), ("^")]
+binop_precedence = [("and", "or"), ("==", "<", ">", "<=", ">="), ("+", "-"), ("%", "/", "*"), ("^")]
 
 def is_lower_precedence(op1 : ast.Op, op2 = ast.Op) -> bool:
     for prec in binop_precedence:
@@ -261,7 +261,7 @@ def expect_close_paren(word :str, result : PartialStatement, state : ParserState
     return result
 
 def expect_binop(word : str, result : PartialStatement, state : ParserState) -> PartialExpression:
-    if word in ("+", "-", "*", "^", "==", "<", ">", "<=", ">=", "and", "or"):
+    if word in ("+", "-", "*", "/", "%", "^", "==", "<", ">", "<=", ">=", "and", "or"):
         state.update(Lookahead(lookahead_expr))
         state.push_op(PartialExpression(ast.Binop, [ast.Op(word)]))
         return result
@@ -379,13 +379,14 @@ def parse(line : str,
   state : ParserState) -> Optional[PartialStatement]:
     line = line.strip() # who needs whitespace anyway
     # "Lex" the line -- yes, this is janky, yes I'm too lazy to fix it
-    tokens = ";=+-*^()<>\{\}"
+    tokens = ";=+-*^()<>\{\}%/"
     for token in tokens:
         line = line.replace(token, f" {token} ")
     # Special 2-character symbols
     line = line.replace("=  =", "==") # yes, this is dumb, but it works, ok?
     line = line.replace(">  =", ">=")
     line = line.replace("<  =", "<=")
+    line = line.replace("/  /", "//")
     line = line.split()
     return parse_line(line, result, state)
 
