@@ -67,15 +67,15 @@ def string_of_binop(exp : Typed[ast.Binop], context : EmitContext) -> str:
     if exp.element.op.op == "or":
         return lor(left, right, context)
     if exp.element.op.op == "==":
-        raise UnimplementedException(exp)
+        return eq(left, right, context)
     if exp.element.op.op == "<":
-        raise UnimplementedException(exp)
+        return lt(left, right, context)
     if exp.element.op.op == ">":
-        raise UnimplementedException(exp)
+        return gt(left, right, context)
     if exp.element.op.op == "<=":
-        raise UnimplementedException(exp)
+        return leq(left, right, context)
     if exp.element.op.op == ">=":
-        raise UnimplementedException(exp)
+        return geq(left, right, context)
     raise InternalException("unknown op " + str(exp.element.op))
 
 def string_of_expr(exp : Typed[ast.Expr], context : EmitContext) -> str:

@@ -211,13 +211,6 @@ def czero(context : EmitContext) -> str:
 
 functions_to_write.append(czero_def)
 
-def zero_def(context : EmitContext) -> str:
-    return f"({pair(czero(context), czero(context), context)})"
-def zero(context : EmitContext) -> str:
-    return f"{app_lc(zero_def, [], context)}"
-
-functions_to_write.append(zero_def)
-
 def csucc_def(context : EmitContext) -> str:
     return f"(lambda _n : (lambda _f : lambda _x : (_f (_n (_f) (_x)))))"
 def csucc(n : str, context : EmitContext) -> str:
@@ -226,7 +219,7 @@ def csucc(n : str, context : EmitContext) -> str:
 functions_to_write.append(csucc_def)
 
 def cplus_def(context : EmitContext) -> str:
-    return f"(lambda _m : lambda _n : (_m ({mr(csucc, context)}) (_n)))"
+    return f"(lambda _m : lambda _n : ({app2('_m', mr(csucc, context), '_n', context)}))"
 def cplus(m : str, n : str, context : EmitContext) -> str:
     return f"{app_lc(cplus_def, [m, n], context)}"
 
@@ -259,6 +252,13 @@ def appsecond(f : str, p : str, context : EmitContext) -> str:
     return f"{app_lc(appsecond_def, [f, p], context)}"
 
 functions_to_write.append(appsecond_def)
+
+def zero_def(context : EmitContext) -> str:
+    return f"({pair(czero(context), czero(context), context)})"
+def zero(context : EmitContext) -> str:
+    return f"{app_lc(zero_def, [], context)}"
+
+functions_to_write.append(zero_def)
 
 def succ_def(context : EmitContext) -> str:
     return f"(lambda _n : ({appfirst(mr(csucc, context), '_n', context)}))"
@@ -316,17 +316,87 @@ def mult(n : str, m : str, context : EmitContext) -> str:
 
 functions_to_write.append(mult_def)
 
+def ciszero_def(context : EmitContext) -> str:
+    return f"(lambda _n : (_n (lambda _x : {false(context)}) ({true(context)})))"
+def ciszero(n : str, context : EmitContext) -> str:
+    return f"{app_lc(ciszero_def, [n], context)}"
+
+functions_to_write.append(ciszero_def)
+
+def cphi_def(context : EmitContext) -> str:
+    return f"(lambda _x : ({pair(second('_x', context), csucc(second('_x', context), context), context)}))"
+def cphi(x : str, context : EmitContext) -> str:
+    return f"{app_lc(cphi_def, [x], context)}"
+
+functions_to_write.append(cphi_def)
+
+def cpred_def(context : EmitContext) -> str:
+    return f"(lambda _n : ({first(app2('_n', mr(cphi, context), pair(czero(context), czero(context), context), context), context)}))"
+def cpred(n : str, context : EmitContext) -> str:
+    return f"{app_lc(cpred_def, [n], context)}"
+
+functions_to_write.append(cpred_def)
+
+def csub_def(context : EmitContext) -> str:
+    return f"(lambda _n : lambda _m : ({app2('_m', mr(cpred, context), '_n', context)}))"
+def csub(n : str, m : str, context : EmitContext) -> str:
+    return f"{app_lc(csub_def, [n, m], context)}"
+
+functions_to_write.append(csub_def)
+
+def cleq_def(context : EmitContext) -> str:
+    return f"(lambda _n : lambda _m : ({ciszero(csub('_n', '_m', context), context)}))"
+def cleq(n : str, m : str, context : EmitContext) -> str:
+    return f"{app_lc(cleq_def, [n, m], context)}"
+
+functions_to_write.append(cleq_def)
+
+def ceq_def(context : EmitContext) -> str:
+    return f"(lambda _n : lambda _m : ({land(cleq('_n', '_m', context), cleq('_m', '_n', context), context)}))"
+def ceq(n : str, m : str, context : EmitContext) -> str:
+    return f"{app_lc(ceq_def, [n, m], context)}"
+
+functions_to_write.append(ceq_def)
+
+def eq_def(context : EmitContext) -> str:
+    return f"(lambda _n : lambda _m : ({ceq(cplus(first('_n', context), second('_m', context), context), cplus(second('_n', context), first('_m', context), context), context)}))"
+def eq(n : str, m : str, context : EmitContext) -> str:
+    return f"{app_lc(eq_def, [n, m], context)}"
+
+functions_to_write.append(eq_def)
+
+def leq_def(context : EmitContext) -> str:
+    return f"(lambda _n : lambda _m : ({cleq(cplus(first('_n', context), second('_m', context), context), cplus(second('_n', context), first('_m', context), context), context)}))"
+def leq(n : str, m : str, context : EmitContext) -> str:
+    return f"{app_lc(leq_def, [n, m], context)}"
+
+functions_to_write.append(leq_def)
+
+def geq_def(context : EmitContext) -> str:
+    return f"(lambda _n : lambda _m : ({leq('_m', '_n', context)}))"
+def geq(n : str, m : str, context : EmitContext) -> str:
+    return f"{app_lc(geq_def, [n, m], context)}"
+
+functions_to_write.append(geq_def)
+
+def lt_def(context : EmitContext) -> str:
+    return f"(lambda _n : lambda _m : ({land(leq('_n', '_m', context), lnot(eq('_n', '_m', context), context), context)}))"
+def lt(n : str, m : str, context : EmitContext) -> str:
+    return f"{app_lc(lt_def, [n, m], context)}"
+
+functions_to_write.append(lt_def)
+
+def gt_def(context : EmitContext) -> str:
+    return f"(lambda _n : lambda _m : ({lt('_m', '_n', context)}))"
+def gt(n : str, m : str, context : EmitContext) -> str:
+    return f"{app_lc(gt_def, [n, m], context)}"
+
+functions_to_write.append(gt_def)
+
 def z_def(context : EmitContext) -> str:
     return f"(lambda _f : ((lambda _x : _f (lambda _v : _x (_x) (_v))) (lambda _x : _f (lambda _v : _x (_x) (_v)))))"
 def z(f : str, context : EmitContext) -> str:
     return f"{app_lc(z_def, [f], context)}"
 
 functions_to_write.append(z_def)
-
-def iszero_def(context : EmitContext) -> str:
-    return f"(lambda _n : ({first('_n', context)} (lambda _x : lambda _a : lambda _b : _b) (lambda _x : lambda _y : _x)))"
-def iszero(n : str, context : EmitContext) -> str:
-    return f"{app_lc(iszero_def, [n], context)}"
-
-functions_to_write.append(iszero_def)
 

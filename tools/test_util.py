@@ -16,12 +16,12 @@ def interpret_file(command : str, filename : str) -> Optional[str]:
     return res2[0].decode("UTF-8")
 
 def clean(result : str) -> List[str]:
-    return [x.strip() for x in result]
+    return [x.strip() for x in result.split("\n")]
 
 def compare(result1 : str, result2 : str) -> bool:
     data1 = clean(result1)
     data2 = clean(result2)
-    ln = 0
+    ln = 1
     for line1, line2 in zip(data1, data2):
         if line1 != line2:
             print (f"Unexpected result on line {ln}: expected {line2}, got {line1}")

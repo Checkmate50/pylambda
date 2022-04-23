@@ -30,15 +30,13 @@ def first(x):
 def second(x):
     return f"{x} ({false()})"
 
-# This is an _unusual_ representation
+# c = church numeral
 def czero():
     return "lambda _f : lambda _x : _x"
-def zero():
-    return f"{pair(czero(), czero())}"
 def csucc(n):
     return f"lambda _f : lambda _x : (_f ({n} (_f) (_x)))"
 def cplus(m, n):
-    return f"{m} ({csucc}) ({n})"
+    return f"{app2(m, csucc, n)}"
 def cmult(m, n):
     return f"lambda _f : ({m} ({n} (_f)))"
 def cexp_def(b, e):
@@ -49,6 +47,9 @@ def appfirst(f, p):
 def appsecond(f, p):
     return f"{pair(first(p), app(f, second(p)))}"
 
+# This is an _unusual_ representation
+def zero():
+    return f"{pair(czero(), czero())}"
 def succ(n):
     return f"{appfirst(csucc, n)}"
 def pred(n):
@@ -67,8 +68,33 @@ def minus(n, m):
 def mult(n, m):
     return f"{pair(app2(cplus, app2(cmult, first(n), first(m)), app2(cmult, second(n), second(m))), app2(cplus, app2(cmult, first(n), second(m)), app2(cmult, second(n), first(m))))}"
 
+def ciszero(n):
+    return f"{n} (lambda _x : {false()}) ({true()})"
+# re: https://en.wikipedia.org/wiki/Lambda_calculus#Pairs
+def cphi(x):
+    return f"{pair(second(x), csucc(second(x)))}"
+# be careful that cpred(0) = 0
+def cpred(n):
+    return f"{first(app2(n, cphi, pair(czero(), czero())))}"
+def csub(n, m):
+    return f"{app2(m, cpred, n)}"
+
+def cleq(n, m):
+    return f"{ciszero(csub(n, m))}"
+def ceq(n, m):
+    return f"{land(cleq(n, m), cleq(m, n))}"
+
+def eq(n, m): #ALGEBRA
+    return f"{ceq(cplus(first(n), second(m)), cplus(second(n), first(m)))}"
+def leq(n, m):
+    return f"{cleq(cplus(first(n), second(m)), cplus(second(n), first(m)))}"
+def geq(n, m):
+    return f"{leq(m, n)}"
+def lt(n, m):
+    return f"{land(leq(n, m), lnot(eq(n, m)))}"
+def gt(n, m):
+    return f"{lt(m, n)}"
+
 # We use the z combinator cause eager Python evaluation
 def z(f):
     return f"(lambda _x : {f} (lambda _v : _x (_x) (_v))) (lambda _x : _f (lambda _v : _x (_x) (_v)))"
-def iszero(n):
-    return f"{first(n)} (lambda _x : lambda _a : lambda _b : _b) (lambda _x : lambda _y : _x)"

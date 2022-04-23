@@ -1,6 +1,7 @@
+from __future__ import annotations  # Recursion!
 import src.ast as ast
 from src.util import *
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Callable
 
 reserved = ("true", "false", "print", "input", "output", "while", "if", "else")
 
@@ -23,11 +24,11 @@ class OpenParen(ast.Expr):
         return "OpenParen"
 
 class ParsingException(Exception):
-    def __init__(self, message : str, state):
+    def __init__(self, message : str, state : ParserState):
         super().__init__("Parsing error on line " + str(state.line_number) + ": " + str(message))
 
 class ParsingExpectException(ParsingException):
-    def __init__(self, expect : str, word : str, state):
+    def __init__(self, expect : str, word : str, state : ParserState):
         super().__init__("expected " + str(expect) + ", got " + str(word), state)
 
 class ParsingState(BaseClass):
@@ -46,7 +47,7 @@ class ConditionState(ParsingState):
         return "DEFAULT STATE"
 
 class Lookahead(BaseClass):
-    def __init__(self, lookahead):
+    def __init__(self, lookahead : Callable[[str, PartialStatement, ParserState]]):
         if not (lookahead == lookahead_binop or lookahead == lookahead_expr):
             raise InternalException("expected lookahead, got " + str(lookahead))
         self.lookahead = lookahead
