@@ -120,7 +120,7 @@ def check_assign(statement : ast.Assign, context : TypeContext) -> Typed[ast.Ass
     return Typed(statement, UnitType())
 
 def check_seq(statement : ast.Seq, context : TypeContext) -> Typed[ast.Seq]:
-    if (isinstance(statement.s1, ast.Seq) and (isinstance(statement.s1.s1, ast.If) or isinstance(statement.s1.s1, ast.Elif))) \
+    if (isinstance(statement.s2, ast.Seq) and (isinstance(statement.s2.s1, ast.Else) or isinstance(statement.s2.s1, ast.Elif))) \
         or isinstance(statement.s2, ast.Else) or isinstance(statement.s2, ast.Elif):
         if not (isinstance(statement.s1, ast.If) or isinstance(statement.s1, ast.Elif)):
             raise TypeException("Elif or Else statement without preceding if or elif statement", context)
