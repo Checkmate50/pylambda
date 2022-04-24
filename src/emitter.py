@@ -1,7 +1,7 @@
 import src.ast as ast
 from src.util import *
 from src.typed_ast import Typed, IntType, BoolType, UnitType, BaseType
-from typing import TypeVar, Union
+from typing import TypeVar, Union, Optional
 from src.lc_constants import *
 
 internal_consts = []
@@ -94,9 +94,22 @@ def string_of_expr(exp : Typed[ast.Expr], context : EmitContext) -> str:
     if isinstance(exp.element, ast.Binop):
         return string_of_binop(exp, context)
 
+def emit_control_function(statement : Typed[ast.Statement], context : EmitContext) -> str:
+    print("  "*context.scope,end='')
+    fn_name = f"_{context.fn_count}"
+    print(f"def {fn_name}():")
+    context.scope += 1
+    context.fn_count += 1 # Could create a new context....but _meh_
+    emit_statement(statement, context)
+    if context.scope <= 0:
+        raise InternalException("Scope became negative during " + str(statement))
+    context.scope -= 1
+    return fn_name
+
 def emit_assign(statement : Typed[ast.Assign], context : EmitContext):
     var = check_typed(statement.element.var)
     exp = check_typed(statement.element.exp)
+    print("  "*context.scope,end='')
     if var.element.v in internal_consts:
         raise Exception("Compile-time error: use of reserved name " + var.element.v)
     print(f"{var.element.v} = {string_of_expr(exp, context)}",end="")
@@ -104,18 +117,32 @@ def emit_assign(statement : Typed[ast.Assign], context : EmitContext):
 def emit_seq(statement : ast.Seq, context : EmitContext):
     s1 = check_typed(statement.s1)
     s2 = check_typed(statement.s2)
-    emit_statement(s1, context)
+    emit_statement(s1, context, s2)
     print()
     emit_statement(s2, context)
 
-def emit_if(statement : ast.If, context : EmitContext):
-    raise UnimplementedException(statement)
+def get_chain(current : Optional[Typed[ast.Statement]], context : EmitContext, follows : Optional[Typed[ast.Statement]] = None) -> str:
+    if current is None:
+        return 'lambda:()'
+    if isinstance(current.element, ast.Seq):
+        return f"{get_chain(current.element.s1, context, current.element.s2)}"
+    elif isinstance(current.element, ast.Else):
+        s = check_typed(current.element.s)
+        fn_name = emit_control_function(s, context)
+        return f'lambda:'+fn_name+'()'
+    elif isinstance(current.element, ast.Elif):
+        s = check_typed(current.element.s)
+        b = check_typed(current.element.b)
+        fn_name = emit_control_function(s, context)
+        return f"{lif(string_of_expr(b, context), 'lambda:'+fn_name+'()', get_chain(follows, context), context)}"
+    return 'lambda:()'
 
-def emit_elif(statement : ast.Elif, context : EmitContext):
-    raise UnimplementedException(statement)
-
-def emit_else(statement : ast.Else, context : EmitContext):
-    raise UnimplementedException(statement)
+def emit_if_chain(statement : ast.If, follows : Optional[Typed[ast.Statement]], context : EmitContext):
+    s = check_typed(statement.s)
+    b = check_typed(statement.b)
+    fn_name = emit_control_function(s, context)
+    print("  "*context.scope,end='')
+    print(f"({lif(string_of_expr(b, context), 'lambda:'+fn_name+'()', get_chain(follows, context), context)})()",end='')
 
 def emit_while(statement : ast.While, context : EmitContext):
     raise UnimplementedException(statement)
@@ -124,12 +151,15 @@ def emit_print(statement : ast.Print, context : EmitContext):
     exp = check_typed(statement.exp)
     result = string_of_expr(exp, context)
     if context.debug():
+        print("  "*context.scope,end='')
         print_assignment("_value", result, context)
         print()
         result = "_value"
     if context.cli.contains("raw"):
+        print("  "*context.scope,end='')
         print("_func = ", end="")
     else:
+        print("  "*context.scope,end='')
         print("print(", end="")
     if isinstance(exp.typ, BoolType):
         interpret_bool(result, context)
@@ -153,8 +183,9 @@ def emit_input(statement : ast.Input, context : EmitContext):
     else:
         print_assignment(var.element.v, "input()", context)
 
-def emit_statement(statement : Typed[ast.Statement], context : EmitContext):
+def emit_statement(statement : Typed[ast.Statement], context : EmitContext, follows : Optional[Typed[ast.Statement]] = None):
     if isinstance(statement.element, ast.Skip):
+        print()
         return
     if isinstance(statement.element, ast.Assign):
         emit_assign(statement, context)
@@ -163,11 +194,11 @@ def emit_statement(statement : Typed[ast.Statement], context : EmitContext):
     elif isinstance(statement.element, ast.Seq):
         emit_seq(statement.element, context)
     elif isinstance(statement.element, ast.If):
-        emit_else(statement.element, context)
+        emit_if_chain(statement.element, follows, context)
     elif isinstance(statement.element, ast.Elif):
-        emit_elif(statement.element, context)
+        pass # Already emitted by the original `if` statement
     elif isinstance(statement.element, ast.Else):
-        emit_else(statement.element, context)
+        pass # Already emitted by the original `if` statement
     elif isinstance(statement.element, ast.While):
         emit_while(statement.element, context)
     elif isinstance(statement.element, ast.Print):

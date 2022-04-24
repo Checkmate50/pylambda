@@ -91,7 +91,9 @@ class CLI:
 class EmitContext(BaseClass):
     def __init__(self, cli : CLI):
         self.cli = cli
-        self.interp : bool = False
+        self.interp = False
+        self.fn_count = 0
+        self.scope = 0
 
     def raw(self):
         return self.cli.contains("raw")

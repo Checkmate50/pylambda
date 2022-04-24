@@ -21,6 +21,8 @@ def clean(result : str) -> List[str]:
 def compare(result1 : str, result2 : str) -> bool:
     data1 = clean(result1)
     data2 = clean(result2)
+    if len(data1) != len(data2):
+        print (f"Non-matching number of results: expected {len(data2)}, got {len(data1)}")
     ln = 1
     for line1, line2 in zip(data1, data2):
         if line1 != line2:

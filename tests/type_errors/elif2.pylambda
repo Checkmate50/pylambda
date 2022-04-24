@@ -1,0 +1,3 @@
+elif true {
+    print 1;
+}

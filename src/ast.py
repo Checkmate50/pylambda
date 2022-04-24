@@ -98,7 +98,7 @@ class Seq(Statement):
         self.s1 = s1
         self.s2 = s2
     def __repr__(self):
-        return str(self.s1) + "\n;\n" + str(self.s2)
+        return "" + str(self.s1) + "\n;\n" + str(self.s2) + ""
 
 class If(Statement):
     def __init__(self, ln : int, b : Union[Expr, Typed[Expr]], s : Union[Statement, Typed[Statement]]):

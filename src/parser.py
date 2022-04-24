@@ -109,13 +109,23 @@ class PartialASTElement(BaseClass):
             self.index_check("overwrite")
             self.args[self.index].overwrite(arg)
         
-    def latest(self):
+    def latest(self) -> PartialASTElement:
         if self.index == -1:
             if self.cmd == ast.Binop:
                 return self.args[-2:]
             return self.args
         self.index_check("use latest")
         return self.args[self.index].latest()
+
+    # Gets the last seq in sequence
+    def latest_seq(self) -> PartialASTElement:
+        if self.index == -1:
+            raise InternalException("Attempting to get seq from " + str(self))
+        self.index_check("use latest_seq")
+        arg = self.args[self.index]
+        if arg.cmd != ast.Seq:
+            return self
+        return self.args[self.index].latest_seq()
 
     def pack(self, state):
         try:
@@ -218,6 +228,15 @@ class ParserState(BaseClass):
     def __repr__(self):
         return "STATE: " + str(self.next)
 
+# Seq(Seq(A, B), .) --> Seq(A, Seq(B, .))
+def untangle_seq(result : PartialStatement, state : ParserState) -> PartialStatement:
+    if result.cmd == ast.Seq:
+        seq = result.latest_seq()
+        cmd = PartialStatement(ast.Seq, [state.line_number, seq.args[2]])
+        seq.args[2] = cmd
+        return result
+    return PartialStatement(ast.Seq, [state.line_number, result.pack(state)])
+
 # So it's sorta weird, but these lookahead functions "manage" the control flow of the parser
 def lookahead_binop(word : str, result : PartialStatement, state : ParserState):
     if not isinstance(state.state, ConditionState) and word == ";":
@@ -242,7 +261,7 @@ def expect_semi(word : str, result : PartialStatement, state : ParserState) -> P
         raise InternalException("Expected ; got " + str(word))
     state.update(expect_statement)
     state.clean_ops(result, False)
-    return PartialStatement(ast.Seq, [state.line_number, result.pack(state)])
+    return untangle_seq(result, state)
 
 def expect_open_block(word :str, result : PartialStatement, state : ParserState) -> PartialExpression:
     if not word == "{":
@@ -343,8 +362,8 @@ def expect_statement(word : str, result : Optional[PartialStatement], state : Pa
             outer.append(PartialStatement(ast.Skip, [state.line_number]))
         else:
             outer.append(result)
-        cmd = PartialStatement(ast.Seq, [state.line_number, outer.pack(state)])
-        return cmd
+        cmd = untangle_seq(outer, state)
+        return cmd # Don't append cmd to result and _then_ return
     elif word in reserved:
         raise ParsingException("attempting to assign to reserved keyword " + str(word), state)
     elif word.isidentifier():

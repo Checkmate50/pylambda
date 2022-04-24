@@ -120,6 +120,10 @@ def check_assign(statement : ast.Assign, context : TypeContext) -> Typed[ast.Ass
     return Typed(statement, UnitType())
 
 def check_seq(statement : ast.Seq, context : TypeContext) -> Typed[ast.Seq]:
+    if (isinstance(statement.s1, ast.Seq) and (isinstance(statement.s1.s1, ast.If) or isinstance(statement.s1.s1, ast.Elif))) \
+        or isinstance(statement.s2, ast.Else) or isinstance(statement.s2, ast.Elif):
+        if not (isinstance(statement.s1, ast.If) or isinstance(statement.s1, ast.Elif)):
+            raise TypeException("Elif or Else statement without preceding if or elif statement", context)
     statement.s1 = check_statement(statement.s1, context)
     statement.s2 = check_statement(statement.s2, context)
     return Typed(statement, UnitType())
@@ -172,4 +176,8 @@ def check_statement(statement : Union[ast.Statement, Typed], context : TypeConte
     raise InternalException("Unknown matched statement " + str(statement))
 
 def typecheck_program(program : ast.Program) -> Typed[ast.Program]:
-    return Typed(ast.Program(check_statement(program.s, TypeContext())), UnitType())
+    context = TypeContext()
+    handle_seq = program.s.s1 if isinstance(program.s, ast.Seq) else program.s
+    if isinstance(handle_seq, ast.Elif) or isinstance(handle_seq, ast.Else):
+        raise TypeException("Cannot start program with Elif or If statement", context)
+    return Typed(ast.Program(check_statement(program.s, context)), UnitType())
