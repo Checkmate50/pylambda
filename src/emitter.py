@@ -97,13 +97,14 @@ def string_of_expr(exp : Typed[ast.Expr], context : EmitContext) -> str:
 def emit_control_function(statement : Typed[ast.Statement], context : EmitContext) -> str:
     print("  "*context.scope,end='')
     fn_name = f"_{context.fn_count}"
-    print(f"def {fn_name}():")
-    context.scope += 1
-    context.fn_count += 1 # Could create a new context....but _meh_
-    emit_statement(statement, context)
-    if context.scope <= 0:
-        raise InternalException("Scope became negative during " + str(statement))
-    context.scope -= 1
+    args = f"()"
+    print(f"def {fn_name+args}:")
+    # hehehehehehehehehe
+    for var in context.vars:
+        print("  "*(context.scope+1),end='')
+        print(f"global {var}")
+    emit_statement(statement, context.copy()) # increments scope by one
+    context.fn_count += 1
     return fn_name
 
 def emit_assign(statement : Typed[ast.Assign], context : EmitContext):
@@ -112,13 +113,16 @@ def emit_assign(statement : Typed[ast.Assign], context : EmitContext):
     print("  "*context.scope,end='')
     if var.element.v in internal_consts:
         raise Exception("Compile-time error: use of reserved name " + var.element.v)
+    if not var.element.v in context.vars:
+        context.vars.append(var.element.v)
     print(f"{var.element.v} = {string_of_expr(exp, context)}",end="")
 
 def emit_seq(statement : ast.Seq, context : EmitContext):
     s1 = check_typed(statement.s1)
     s2 = check_typed(statement.s2)
     emit_statement(s1, context, s2)
-    print()
+    if not isinstance(s1.element, ast.Elif) and not isinstance(s1.element, ast.Else):
+        print()
     emit_statement(s2, context)
 
 def get_chain(current : Optional[Typed[ast.Statement]], context : EmitContext, follows : Optional[Typed[ast.Statement]] = None) -> str:
@@ -142,10 +146,20 @@ def emit_if_chain(statement : ast.If, follows : Optional[Typed[ast.Statement]], 
     b = check_typed(statement.b)
     fn_name = emit_control_function(s, context)
     print("  "*context.scope,end='')
-    print(f"({lif(string_of_expr(b, context), 'lambda:'+fn_name+'()', get_chain(follows, context), context)})()",end='')
+    args = f"()"
+    print(f"({lif(string_of_expr(b, context), 'lambda:'+fn_name+args, get_chain(follows, context), context)})()",end='')
 
 def emit_while(statement : ast.While, context : EmitContext):
-    raise UnimplementedException(statement)
+    s = check_typed(statement.s)
+    b = check_typed(statement.b)
+    fn_name = emit_control_function(s, context)
+    print("  "*context.scope,end='')
+    print(f"_dummy={false(context)}") # do this for argument passing reasons
+    print("  "*context.scope,end='')
+    args = f"()"
+    inner_lif = lif(string_of_expr(b, context), 'lambda:_rec('+fn_name+args+')', 'lambda:()', context)
+    # ok, this is super evil, but we can actually recurse in this way cause Python is _greedy_
+    print(f"({z('lambda _rec: lambda _: (' + inner_lif + ')()', context)})(_dummy)")
 
 def emit_print(statement : ast.Print, context : EmitContext):
     exp = check_typed(statement.exp)

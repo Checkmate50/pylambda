@@ -98,6 +98,7 @@ class EmitContext(BaseClass):
         self.interp = False
         self.fn_count = 0
         self.scope = 0
+        self.vars = []
 
     def raw(self):
         return self.cli.contains("raw")
@@ -107,6 +108,14 @@ class EmitContext(BaseClass):
     
     def no_input(self):
         return self.cli.contains("no-input")
+
+    def copy(self):
+        result = EmitContext(self.cli)
+        result.interp = self.interp
+        result.fn_count = 0
+        result.scope = self.scope + 1
+        result.vars = self.vars
+        return result
 
     def __repr__(self):
         return "EMIT_CONTEXT" + str(self.cli)

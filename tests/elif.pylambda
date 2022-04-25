@@ -1,7 +1,18 @@
 if false and true {
     print false;
+} elif true {
+    print true;
+} else {
+    print false;
+}
+if false and (false or true) {
+    print false;
 } elif true or not true {
     print true;
+} elif true {
+    print false;
+} elif false {
+    print false;
 } else {
     print false;
 }
