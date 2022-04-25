@@ -94,15 +94,15 @@ def string_of_expr(exp : Typed[ast.Expr], context : EmitContext) -> str:
     if isinstance(exp.element, ast.Binop):
         return string_of_binop(exp, context)
 
+def str_of_vars(context : EmitContext) -> str:
+    return f"({', '.join(context.vars)})"
+
 def emit_control_function(statement : Typed[ast.Statement], context : EmitContext) -> str:
     print("  "*context.scope,end='')
     fn_name = f"_{context.fn_count}"
-    args = f"()"
+    args = str_of_vars(context)
     print(f"def {fn_name+args}:")
     # hehehehehehehehehe
-    for var in context.vars:
-        print("  "*(context.scope+1),end='')
-        print(f"global {var}")
     emit_statement(statement, context.copy()) # increments scope by one
     context.fn_count += 1
     return fn_name
@@ -113,9 +113,11 @@ def emit_assign(statement : Typed[ast.Assign], context : EmitContext):
     print("  "*context.scope,end='')
     if var.element.v in internal_consts:
         raise Exception("Compile-time error: use of reserved name " + var.element.v)
-    if not var.element.v in context.vars:
+    if var.element.v in context.vars:
+        print(f"{var.element.v}.val = {string_of_expr(exp, context)}",end="")
+    else:
         context.vars.append(var.element.v)
-    print(f"{var.element.v} = {string_of_expr(exp, context)}",end="")
+        print(f"{var.element.v} = _Var({string_of_expr(exp, context)})",end="")
 
 def emit_seq(statement : ast.Seq, context : EmitContext):
     s1 = check_typed(statement.s1)
@@ -133,21 +135,24 @@ def get_chain(current : Optional[Typed[ast.Statement]], context : EmitContext, f
     elif isinstance(current.element, ast.Else):
         s = check_typed(current.element.s)
         fn_name = emit_control_function(s, context)
-        return f'lambda:'+fn_name+'()'
+        args = str_of_vars(context)
+        return f'lambda:'+fn_name+args
     elif isinstance(current.element, ast.Elif):
         s = check_typed(current.element.s)
         b = check_typed(current.element.b)
         fn_name = emit_control_function(s, context)
-        return f"{lif(string_of_expr(b, context), 'lambda:'+fn_name+'()', get_chain(follows, context), context)}"
+        args = str_of_vars(context)
+        return f"{lif(string_of_expr(b, context), 'lambda:'+fn_name+args, get_chain(follows, context), context)}"
     return 'lambda:()'
 
 def emit_if_chain(statement : ast.If, follows : Optional[Typed[ast.Statement]], context : EmitContext):
     s = check_typed(statement.s)
     b = check_typed(statement.b)
     fn_name = emit_control_function(s, context)
+    chain = get_chain(follows, context)
     print("  "*context.scope,end='')
-    args = f"()"
-    print(f"({lif(string_of_expr(b, context), 'lambda:'+fn_name+args, get_chain(follows, context), context)})()",end='')
+    args = str_of_vars(context)
+    print(f"({lif(string_of_expr(b, context), 'lambda:'+fn_name+args, chain, context)})()",end='')
 
 def emit_while(statement : ast.While, context : EmitContext):
     s = check_typed(statement.s)
@@ -156,7 +161,7 @@ def emit_while(statement : ast.While, context : EmitContext):
     print("  "*context.scope,end='')
     print(f"_dummy={false(context)}") # do this for argument passing reasons
     print("  "*context.scope,end='')
-    args = f"()"
+    args = str_of_vars(context)
     inner_lif = lif(string_of_expr(b, context), 'lambda:_rec('+fn_name+args+')', 'lambda:()', context)
     # ok, this is super evil, but we can actually recurse in this way cause Python is _greedy_
     print(f"({z('lambda _rec: lambda _: (' + inner_lif + ')()', context)})(_dummy)")
@@ -195,7 +200,7 @@ def emit_input(statement : ast.Input, context : EmitContext):
     if context.no_input():
         print_assignment(var.element.v, zero(context), context)
     else:
-        print_assignment(var.element.v, "input()", context)
+        print_assignment(var.element.v, "int(input())", context)
 
 def emit_statement(statement : Typed[ast.Statement], context : EmitContext, follows : Optional[Typed[ast.Statement]] = None):
     if isinstance(statement.element, ast.Skip):
@@ -209,9 +214,7 @@ def emit_statement(statement : Typed[ast.Statement], context : EmitContext, foll
         emit_seq(statement.element, context)
     elif isinstance(statement.element, ast.If):
         emit_if_chain(statement.element, follows, context)
-    elif isinstance(statement.element, ast.Elif):
-        pass # Already emitted by the original `if` statement
-    elif isinstance(statement.element, ast.Else):
+    elif isinstance(statement.element, ast.Elif) or isinstance(statement.element, ast.Else):
         pass # Already emitted by the original `if` statement
     elif isinstance(statement.element, ast.While):
         emit_while(statement.element, context)
@@ -228,6 +231,7 @@ def emit(program : Typed[ast.Program], cli : CLI):
     print("import sys")
     print("sys.setrecursionlimit(100000) # This is fine, nothing can possibly go wrong")
     print("def _raise(x): raise x # stupid lambdas and stupid statements")
+    print(scope_manager)
     if context.raw():
         print(lc_inspector)
     if context.debug():

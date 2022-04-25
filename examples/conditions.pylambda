@@ -1,0 +1,22 @@
+x = 5;
+y = true;
+if true {
+    y = false;
+    if y {
+        print y;
+    } elif x > 3 {
+        print true;
+        x = x + 1;
+    } else {
+        print false;
+        x = x - 1;
+    }
+    y = not y;
+    if y {
+        print y;
+        x = x + 3;
+    } else {
+        print false;
+    }
+}
+print x;

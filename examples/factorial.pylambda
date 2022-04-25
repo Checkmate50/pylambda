@@ -1,0 +1,7 @@
+x = 4; // this fails on my machine with x = 5
+result = 1;
+while x > 0 {
+    result = result * x;
+    x = x - 1;
+}
+print result;

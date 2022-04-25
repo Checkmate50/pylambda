@@ -1,0 +1,12 @@
+x = 5;
+if true {
+    y = 3;
+    if true {
+        y = 2;
+        if true {
+            x = 1;
+        }
+    }
+    print y;
+}
+print x;

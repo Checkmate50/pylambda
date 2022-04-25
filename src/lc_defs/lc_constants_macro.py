@@ -13,6 +13,12 @@ from src.util import *
 import inspect
 from typing import Set, List
 
+scope_manager = \"\"\"class _Var:
+    def __init__(self, val):
+        self.val = val
+    def __call__(self, other): # it's just a lambda ;)
+        return self.val(other)\"\"\"
+
 lc_inspector = \"\"\"
 import inspect
 
@@ -114,7 +120,7 @@ class EmitContext(BaseClass):
         result.interp = self.interp
         result.fn_count = 0
         result.scope = self.scope + 1
-        result.vars = self.vars
+        result.vars = [var for var in self.vars]
         return result
 
     def __repr__(self):
