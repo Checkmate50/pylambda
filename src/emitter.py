@@ -102,7 +102,6 @@ def emit_control_function(statement : Typed[ast.Statement], context : EmitContex
     fn_name = f"_{context.fn_count}"
     args = str_of_vars(context)
     print(f"def {fn_name+args}:")
-    # hehehehehehehehehe
     emit_statement(statement, context.copy()) # increments scope by one
     context.fn_count += 1
     return fn_name
@@ -200,7 +199,15 @@ def emit_input(statement : ast.Input, context : EmitContext):
     if context.no_input():
         print_assignment(var.element.v, zero(context), context)
     else:
-        print_assignment(var.element.v, "int(input())", context)
+        if context.debug():
+            print("# Ugh, we have to use actual Python to interpret this thing?  How annoying")
+        inp_bin = "bin(int(input()))[2:]"
+        mul = mult('_rec(_bin[:-1])', two(context), context)
+        check_zero = f'{mul} if _bin[-1] == "0" else {succ(mul, context)}'
+        nxt_value = f"{check_zero}"
+        rec = f"lambda _rec : lambda _bin : (({nxt_value}) if _bin else {zero(context)})"
+        expr = f"({z(rec, context)})({inp_bin})"
+        print_assignment(var.element.v, expr, context)
 
 def emit_statement(statement : Typed[ast.Statement], context : EmitContext, follows : Optional[Typed[ast.Statement]] = None):
     if isinstance(statement.element, ast.Skip):
