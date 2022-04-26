@@ -51,6 +51,8 @@ def parse_command(inp : List[str], state : ReadState) -> str:
         state.index += 1
         if token == '^': # Special case for exponentiation
             result.append("**")
+        elif token == '/': # Division stuff
+            result.append("//")
         elif token in ("true", "false"):
             result.append(token.capitalize())
         else:

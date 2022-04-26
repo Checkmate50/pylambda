@@ -10,12 +10,14 @@ def main():
         help()
         return
     if os.path.isdir(argv[1]):
-        for (_, _, filenames) in os.walk(argv[1]):
-            for filename in filenames:
-                if not test_file(f"{argv[1]}/{filename}"):
-                    print(f"Failure in file {filename}")
-                    return
-                print(f"{argv[1]}/{filename} run successfully")
+        for filename in os.listdir(argv[1]):
+            filepath = f"{argv[1]}/{filename}"
+            if os.path.isdir(filepath):
+                continue
+            if not test_file(filepath):
+                print(f"Failure in file {filename}")
+                return
+            print(f"{filepath} run successfully")
         print(f"Tests run successfully on directory {argv[1]}")
         return
     if not test_file(argv[1]):
