@@ -32,7 +32,7 @@ All errors can be reported directly to Checkmate#0888 on discord or filed as an 
 
 ## Examples
 
-To understand the basics of the lambda calculus and encodings, I recommend either a [good PL book](cis.upenn.edu/~bcpierce/tapl/) or the [intro Wikipedia article](https://en.wikipedia.org/wiki/Lambda_calculus).  
+To understand the basics of the lambda calculus and encodings, I recommend either a [good PL book](https://cis.upenn.edu/~bcpierce/tapl/) or the [intro Wikipedia article](https://en.wikipedia.org/wiki/Lambda_calculus).  
 
 PyLambda can generate code for a variety of standard commands.  For example, you may write
 
