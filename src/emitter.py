@@ -232,7 +232,6 @@ def emit_statement(statement : Typed[ast.Statement], context : EmitContext, foll
     else:
         raise InternalException("Unimplemented statement " + str(statement))
 
-import sys
 def emit(program : Typed[ast.Program], cli : CLI):
     context = EmitContext(cli)
     print("import sys")
